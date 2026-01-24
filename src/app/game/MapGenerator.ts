@@ -48,6 +48,9 @@ export class MapGenerator {
       this.generateArchipelagoMap(squares);
     }
 
+    // Generate residential and office densities
+    this.generateDensities(squares);
+
     return {
       width: MAP_WIDTH,
       height: MAP_HEIGHT,
@@ -222,23 +225,42 @@ export class MapGenerator {
 
   /**
    * Draw a perfectly straight 1-square wide river
+   * Uses step-by-step movement to ensure strict edge-adjacency (no diagonal steps)
    */
   private drawStraightRiver(
     squares: GridSquare[][],
     start: { x: number; y: number },
     end: { x: number; y: number },
   ): void {
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
-    const steps = Math.max(Math.abs(dx), Math.abs(dy));
+    let x = start.x;
+    let y = start.y;
+    const dx = Math.abs(end.x - start.x);
+    const dy = Math.abs(end.y - start.y);
+    const sx = start.x < end.x ? 1 : -1;
+    const sy = start.y < end.y ? 1 : -1;
+    let err = dx - dy;
 
-    for (let i = 0; i <= steps; i++) {
-      const t = steps === 0 ? 0 : i / steps;
-      const x = Math.round(start.x + dx * t);
-      const y = Math.round(start.y + dy * t);
-
+    // Bresenham's line algorithm - ensures only horizontal or vertical steps
+    while (true) {
+      // Mark current position
       if (x >= 0 && x < MAP_WIDTH && y >= 0 && y < MAP_HEIGHT) {
         squares[y][x].type = "WATER";
+      }
+
+      // Check if we reached the end
+      if (x === end.x && y === end.y) break;
+
+      const e2 = 2 * err;
+
+      // Move horizontally
+      if (e2 > -dy) {
+        err -= dy;
+        x += sx;
+      }
+      // Move vertically
+      else if (e2 < dx) {
+        err += dx;
+        y += sy;
       }
     }
   }
@@ -264,15 +286,21 @@ export class MapGenerator {
     const dy = end.y - start.y;
     const totalDist = Math.sqrt(dx * dx + dy * dy);
 
-    while (steps < maxSteps) {
-      centerline.push({ x: Math.round(x), y: Math.round(y) });
+    // Add starting point
+    centerline.push({ x: Math.round(x), y: Math.round(y) });
 
+    while (steps < maxSteps) {
       // Check if we reached the end
       const distToEnd = Math.sqrt(
         Math.pow(x - end.x, 2) + Math.pow(y - end.y, 2),
       );
       if (distToEnd < 1.5) {
-        centerline.push({ x: end.x, y: end.y });
+        // Make sure end point is edge-adjacent to last point
+        this.addEdgeAdjacentPoints(
+          centerline,
+          centerline[centerline.length - 1],
+          end,
+        );
         break;
       }
 
@@ -314,11 +342,61 @@ export class MapGenerator {
       x = Math.max(0, Math.min(MAP_WIDTH - 1, x));
       y = Math.max(0, Math.min(MAP_HEIGHT - 1, y));
 
+      // Round to integer position
+      const newPoint = { x: Math.round(x), y: Math.round(y) };
+      const lastPoint = centerline[centerline.length - 1];
+
+      // Only add if it's different from the last point
+      if (newPoint.x !== lastPoint.x || newPoint.y !== lastPoint.y) {
+        // Ensure edge-adjacency by adding intermediate points if needed
+        this.addEdgeAdjacentPoints(centerline, lastPoint, newPoint);
+      }
+
       steps++;
     }
 
     // Now expand the centerline to the desired width using edge-adjacent flood fill
     this.expandCenterlineToWidth(squares, centerline, width);
+  }
+
+  /**
+   * Add edge-adjacent intermediate points between two points if they're not already edge-adjacent
+   */
+  private addEdgeAdjacentPoints(
+    path: { x: number; y: number }[],
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+  ): void {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+
+    // If already edge-adjacent, just add the target point
+    if ((Math.abs(dx) === 1 && dy === 0) || (Math.abs(dy) === 1 && dx === 0)) {
+      path.push(to);
+      return;
+    }
+
+    // If same point, don't add
+    if (dx === 0 && dy === 0) {
+      return;
+    }
+
+    // Need to add intermediate points
+    // Use a simple step-by-step approach: move in the direction with larger distance first
+    let currentX = from.x;
+    let currentY = from.y;
+
+    while (currentX !== to.x || currentY !== to.y) {
+      if (Math.abs(to.x - currentX) > Math.abs(to.y - currentY)) {
+        // Move horizontally
+        currentX += to.x > currentX ? 1 : -1;
+      } else {
+        // Move vertically
+        currentY += to.y > currentY ? 1 : -1;
+      }
+
+      path.push({ x: currentX, y: currentY });
+    }
   }
 
   /**
@@ -820,5 +898,154 @@ export class MapGenerator {
       stack.push({ x, y: y + 1 });
       stack.push({ x, y: y - 1 });
     }
+  }
+
+  /**
+   * Generate residential and office densities for land tiles
+   * Total sum of residential densities should be < 50000
+   * Total sum of office densities should be < 50000
+   * Both values are 0-99 for each land square
+   */
+  private generateDensities(squares: GridSquare[][]): void {
+    // Count land tiles
+    const landTiles: { x: number; y: number }[] = [];
+    for (let y = 0; y < MAP_HEIGHT; y++) {
+      for (let x = 0; x < MAP_WIDTH; x++) {
+        if (squares[y][x].type === "LAND") {
+          landTiles.push({ x, y });
+        }
+      }
+    }
+
+    if (landTiles.length === 0) return;
+
+    // Generate 2-4 residential hotspots
+    const residentialHotspots = this.generateHotspots(2, 4);
+
+    // Generate 1-3 office hotspots (fewer than residential)
+    const officeHotspots = this.generateHotspots(1, 3);
+
+    // Assign densities based on distance to hotspots
+    let totalResidential = 0;
+    let totalOffice = 0;
+
+    for (const tile of landTiles) {
+      const { x, y } = tile;
+
+      // Calculate residential density based on proximity to residential hotspots
+      let homeDensity = this.calculateDensityFromHotspots(
+        x,
+        y,
+        residentialHotspots,
+      );
+
+      // Calculate office density based on proximity to office hotspots
+      let officeDensity = this.calculateDensityFromHotspots(
+        x,
+        y,
+        officeHotspots,
+      );
+
+      // Add inverse correlation - if one is high, the other tends to be lower
+      // But with some randomness for mixed-use zones
+      const inverseFactor = this.random();
+      if (inverseFactor < 0.7) {
+        // 70% of the time, apply inverse correlation
+        if (homeDensity > 50 && officeDensity > 50) {
+          // Both high - randomly favor one
+          if (randomBool(0.5, this.random)) {
+            officeDensity = Math.floor(officeDensity * 0.4);
+          } else {
+            homeDensity = Math.floor(homeDensity * 0.4);
+          }
+        }
+      }
+
+      // Add some noise
+      homeDensity = Math.floor(
+        Math.max(
+          0,
+          Math.min(99, homeDensity + randomInt(-10, 10, this.random)),
+        ),
+      );
+      officeDensity = Math.floor(
+        Math.max(
+          0,
+          Math.min(99, officeDensity + randomInt(-10, 10, this.random)),
+        ),
+      );
+
+      squares[y][x].homeDensity = homeDensity;
+      squares[y][x].officeDensity = officeDensity;
+
+      totalResidential += homeDensity;
+      totalOffice += officeDensity;
+    }
+
+    // Scale down if totals exceed 50000
+    if (totalResidential > 50000) {
+      const scale = 50000 / totalResidential;
+      for (const tile of landTiles) {
+        squares[tile.y][tile.x].homeDensity = Math.floor(
+          squares[tile.y][tile.x].homeDensity * scale,
+        );
+      }
+    }
+
+    if (totalOffice > 50000) {
+      const scale = 50000 / totalOffice;
+      for (const tile of landTiles) {
+        squares[tile.y][tile.x].officeDensity = Math.floor(
+          squares[tile.y][tile.x].officeDensity * scale,
+        );
+      }
+    }
+  }
+
+  /**
+   * Generate random hotspot locations
+   */
+  private generateHotspots(
+    min: number,
+    max: number,
+  ): { x: number; y: number; strength: number }[] {
+    const count = randomInt(min, max, this.random);
+    const hotspots: { x: number; y: number; strength: number }[] = [];
+
+    for (let i = 0; i < count; i++) {
+      hotspots.push({
+        x: randomInt(5, MAP_WIDTH - 5, this.random),
+        y: randomInt(3, MAP_HEIGHT - 3, this.random),
+        strength: randomInt(70, 99, this.random),
+      });
+    }
+
+    return hotspots;
+  }
+
+  /**
+   * Calculate density for a tile based on distance to hotspots
+   */
+  private calculateDensityFromHotspots(
+    x: number,
+    y: number,
+    hotspots: { x: number; y: number; strength: number }[],
+  ): number {
+    let maxDensity = 0;
+
+    for (const hotspot of hotspots) {
+      const distance = Math.sqrt(
+        Math.pow(x - hotspot.x, 2) + Math.pow(y - hotspot.y, 2),
+      );
+
+      // Density falls off with distance from hotspot
+      const falloffRadius = 12; // How far the hotspot influence reaches
+      const density =
+        hotspot.strength * Math.max(0, 1 - distance / falloffRadius);
+
+      maxDensity = Math.max(maxDensity, density);
+    }
+
+    return Math.floor(maxDensity);
   }
 }

@@ -9,7 +9,7 @@ import { Container, Graphics } from "pixi.js";
 import { MapGenerator } from "../game/MapGenerator";
 import { MapRenderer } from "../game/MapRenderer";
 import type { MapGrid } from "../game/models/MapGrid";
-import { Button } from "../ui/Button";
+import { FlatButton } from "../ui/FlatButton";
 import { Label } from "../ui/Label";
 
 const MIN_SEED = 0;
@@ -24,10 +24,14 @@ export class MapPickerScreen extends Container {
   private seedValueLabel: Label;
   private mapTypeLabel: Label;
 
-  private decrementButton: Button;
-  private incrementButton: Button;
-  private randomButton: Button;
-  private generateButton: Button;
+  private decrementButton: FlatButton;
+  private incrementButton: FlatButton;
+  private randomButton: FlatButton;
+  private generateButton: FlatButton;
+  private showResidentialButton: FlatButton;
+  private showOfficeButton: FlatButton;
+  private showDefaultButton: FlatButton;
+  private showBothButton: FlatButton;
 
   private mapRenderer: MapRenderer;
   private mapContainer: Container;
@@ -81,43 +85,96 @@ export class MapPickerScreen extends Container {
     this.addChild(this.mapTypeLabel);
 
     // Seed control buttons
-    this.decrementButton = new Button({
+    this.decrementButton = new FlatButton({
       text: "-",
-      width: 80,
-      height: 80,
-      fontSize: 36,
+      width: 50,
+      height: 50,
+      fontSize: 28,
+      backgroundColor: 0x555555,
     });
     this.decrementButton.onPress.connect(() => this.adjustSeed(-1));
     this.addChild(this.decrementButton);
 
-    this.incrementButton = new Button({
+    this.incrementButton = new FlatButton({
       text: "+",
-      width: 80,
-      height: 80,
-      fontSize: 36,
+      width: 50,
+      height: 50,
+      fontSize: 28,
+      backgroundColor: 0x555555,
     });
     this.incrementButton.onPress.connect(() => this.adjustSeed(1));
     this.addChild(this.incrementButton);
 
     // Random seed button
-    this.randomButton = new Button({
+    this.randomButton = new FlatButton({
       text: "Random",
-      width: 140,
-      height: 60,
-      fontSize: 20,
+      width: 100,
+      height: 50,
+      fontSize: 18,
+      backgroundColor: 0x4a90e2,
     });
     this.randomButton.onPress.connect(() => this.randomizeSeed());
     this.addChild(this.randomButton);
 
     // Generate button
-    this.generateButton = new Button({
-      text: "Generate Map",
-      width: 200,
-      height: 80,
-      fontSize: 24,
+    this.generateButton = new FlatButton({
+      text: "Generate",
+      width: 120,
+      height: 50,
+      fontSize: 18,
+      backgroundColor: 0x22aa66,
     });
     this.generateButton.onPress.connect(() => this.generateMap());
     this.addChild(this.generateButton);
+
+    // Visualization mode buttons
+    this.showDefaultButton = new FlatButton({
+      text: "Default",
+      width: 100,
+      height: 40,
+      fontSize: 16,
+      backgroundColor: 0x666666,
+    });
+    this.showDefaultButton.onPress.connect(() =>
+      this.setVisualizationMode("DEFAULT"),
+    );
+    this.addChild(this.showDefaultButton);
+
+    this.showResidentialButton = new FlatButton({
+      text: "Residential",
+      width: 120,
+      height: 40,
+      fontSize: 16,
+      backgroundColor: 0x44aa44,
+    });
+    this.showResidentialButton.onPress.connect(() =>
+      this.setVisualizationMode("RESIDENTIAL"),
+    );
+    this.addChild(this.showResidentialButton);
+
+    this.showOfficeButton = new FlatButton({
+      text: "Office",
+      width: 100,
+      height: 40,
+      fontSize: 16,
+      backgroundColor: 0xcc4444,
+    });
+    this.showOfficeButton.onPress.connect(() =>
+      this.setVisualizationMode("OFFICE"),
+    );
+    this.addChild(this.showOfficeButton);
+
+    this.showBothButton = new FlatButton({
+      text: "Both",
+      width: 100,
+      height: 40,
+      fontSize: 16,
+      backgroundColor: 0x8855aa,
+    });
+    this.showBothButton.onPress.connect(() =>
+      this.setVisualizationMode("BOTH"),
+    );
+    this.addChild(this.showBothButton);
 
     // Map display container
     this.mapContainer = new Container();
@@ -176,6 +233,28 @@ export class MapPickerScreen extends Container {
   }
 
   /**
+   * Set visualization mode
+   */
+  private setVisualizationMode(
+    mode: "DEFAULT" | "RESIDENTIAL" | "OFFICE" | "BOTH",
+  ): void {
+    this.mapRenderer.setVisualizationMode(mode);
+
+    // Update button styles to show active state
+    const activeOpacity = 1.0;
+    const inactiveOpacity = 0.6;
+
+    this.showDefaultButton.alpha =
+      mode === "DEFAULT" ? activeOpacity : inactiveOpacity;
+    this.showResidentialButton.alpha =
+      mode === "RESIDENTIAL" ? activeOpacity : inactiveOpacity;
+    this.showOfficeButton.alpha =
+      mode === "OFFICE" ? activeOpacity : inactiveOpacity;
+    this.showBothButton.alpha =
+      mode === "BOTH" ? activeOpacity : inactiveOpacity;
+  }
+
+  /**
    * Draw background/border for the map
    */
   private drawMapBackground(): void {
@@ -221,36 +300,59 @@ export class MapPickerScreen extends Container {
 
     // Title at top
     this.titleLabel.x = centerX;
-    this.titleLabel.y = 50;
+    this.titleLabel.y = 40;
 
-    // Seed controls area
-    const controlsY = 130;
+    // Seed controls area - all in one row at the top with proper spacing
+    const controlsY = 100;
 
-    this.seedLabel.x = centerX - 120;
+    this.seedLabel.x = centerX - 200;
     this.seedLabel.y = controlsY;
 
-    this.decrementButton.x = centerX - 60;
+    // Decrement button with spacing
+    this.decrementButton.x = centerX - 125;
     this.decrementButton.y = controlsY;
 
-    this.seedValueLabel.x = centerX;
+    // Seed value in the middle
+    this.seedValueLabel.x = centerX - 60;
     this.seedValueLabel.y = controlsY;
 
-    this.incrementButton.x = centerX + 60;
+    // Increment button with spacing
+    this.incrementButton.x = centerX + 5;
     this.incrementButton.y = controlsY;
 
-    this.randomButton.x = centerX + 150;
+    // Add padding after + button before Random
+    this.randomButton.x = centerX + 100;
     this.randomButton.y = controlsY;
 
-    // Map type label
+    // Space between Random and Generate
+    this.generateButton.x = centerX + 220;
+    this.generateButton.y = controlsY;
+
+    // Map type label below controls
     this.mapTypeLabel.x = centerX;
     this.mapTypeLabel.y = controlsY + 50;
 
-    // Map display - centered
+    // Visualization mode buttons below map type label
+    const vizButtonsY = controlsY + 85;
+    this.showDefaultButton.x = centerX - 165;
+    this.showDefaultButton.y = vizButtonsY;
+
+    this.showResidentialButton.x = centerX - 55;
+    this.showResidentialButton.y = vizButtonsY;
+
+    this.showOfficeButton.x = centerX + 65;
+    this.showOfficeButton.y = vizButtonsY;
+
+    this.showBothButton.x = centerX + 175;
+    this.showBothButton.y = vizButtonsY;
+
+    // Map display - centered and starting below controls
     const mapWidth = this.mapRenderer.getMapWidth();
     const mapHeight = this.mapRenderer.getMapHeight();
 
     // Scale map to fit if needed
-    const availableHeight = height - 300;
+    const mapStartY = 240;
+    const availableHeight = height - mapStartY - 20;
     const availableWidth = width - 40;
     const scaleX = availableWidth / mapWidth;
     const scaleY = availableHeight / mapHeight;
@@ -258,11 +360,7 @@ export class MapPickerScreen extends Container {
 
     this.mapContainer.scale.set(mapScale);
     this.mapContainer.x = centerX - (mapWidth * mapScale) / 2;
-    this.mapContainer.y = 200;
-
-    // Generate button at bottom
-    this.generateButton.x = centerX;
-    this.generateButton.y = height - 60;
+    this.mapContainer.y = mapStartY;
   }
 
   /** Show screen with animations */
@@ -278,6 +376,10 @@ export class MapPickerScreen extends Container {
       this.generateButton,
       this.mapContainer,
       this.mapTypeLabel,
+      this.showDefaultButton,
+      this.showResidentialButton,
+      this.showOfficeButton,
+      this.showBothButton,
     ];
 
     for (const element of elementsToAnimate) {
