@@ -6,11 +6,13 @@
 import { animate } from "motion";
 import { Container, Graphics } from "pixi.js";
 
+import { engine } from "../getEngine";
 import { MapGenerator } from "../game/MapGenerator";
 import { MapRenderer } from "../game/MapRenderer";
 import type { MapGrid } from "../game/models/MapGrid";
 import { FlatButton } from "../ui/FlatButton";
 import { Label } from "../ui/Label";
+import { MetroBuildingScreen } from "./MetroBuildingScreen";
 
 const MIN_SEED = 0;
 const MAX_SEED = 999;
@@ -32,6 +34,7 @@ export class MapPickerScreen extends Container {
   private showOfficeButton: FlatButton;
   private showDefaultButton: FlatButton;
   private showBothButton: FlatButton;
+  private startButton: FlatButton;
 
   private mapRenderer: MapRenderer;
   private mapContainer: Container;
@@ -176,6 +179,17 @@ export class MapPickerScreen extends Container {
     );
     this.addChild(this.showBothButton);
 
+    // START button to proceed to metro building
+    this.startButton = new FlatButton({
+      text: "START",
+      width: 150,
+      height: 60,
+      fontSize: 24,
+      backgroundColor: 0x22aa66,
+    });
+    this.startButton.onPress.connect(() => this.startMetroBuilding());
+    this.addChild(this.startButton);
+
     // Map display container
     this.mapContainer = new Container();
     this.addChild(this.mapContainer);
@@ -252,6 +266,23 @@ export class MapPickerScreen extends Container {
       mode === "OFFICE" ? activeOpacity : inactiveOpacity;
     this.showBothButton.alpha =
       mode === "BOTH" ? activeOpacity : inactiveOpacity;
+  }
+
+  /**
+   * Start metro building phase
+   */
+  private async startMetroBuilding(): Promise<void> {
+    if (!this.currentMap) return;
+
+    // Navigate to metro building screen
+    const nav = engine().navigation;
+    await nav.showScreen(MetroBuildingScreen);
+
+    // Pass the map to the screen after it's created
+    const screen = nav.currentScreen as MetroBuildingScreen;
+    if (screen && screen.setMap) {
+      screen.setMap(this.currentMap);
+    }
   }
 
   /**
@@ -346,12 +377,17 @@ export class MapPickerScreen extends Container {
     this.showBothButton.x = centerX + 175;
     this.showBothButton.y = vizButtonsY;
 
-    // Map display - centered and starting below controls
+    // START button below visualization buttons
+    const startButtonY = vizButtonsY + 60;
+    this.startButton.x = centerX - 75;
+    this.startButton.y = startButtonY;
+
+    // Map display - centered and starting below START button
     const mapWidth = this.mapRenderer.getMapWidth();
     const mapHeight = this.mapRenderer.getMapHeight();
 
     // Scale map to fit if needed
-    const mapStartY = 240;
+    const mapStartY = startButtonY + 80;
     const availableHeight = height - mapStartY - 20;
     const availableWidth = width - 40;
     const scaleX = availableWidth / mapWidth;
@@ -380,6 +416,7 @@ export class MapPickerScreen extends Container {
       this.showResidentialButton,
       this.showOfficeButton,
       this.showBothButton,
+      this.startButton,
     ];
 
     for (const element of elementsToAnimate) {
