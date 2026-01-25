@@ -15,6 +15,7 @@ export interface GameState {
   map: MapGrid;
   stations: Station[];
   lines: MetroLine[];
+  simulationTime: number; // Unix timestamp in milliseconds
   // Future: trains, passengers, score, etc.
 }
 
@@ -22,11 +23,14 @@ export interface GameState {
  * Create a new empty game state
  */
 export function createGameState(seed: number, map: MapGrid): GameState {
+  // Start at 1 Jan 2025 08:00
+  const startDate = new Date("2025-01-01T08:00:00");
   return {
     seed,
     map,
     stations: [],
     lines: [],
+    simulationTime: startDate.getTime(),
   };
 }
 
@@ -85,7 +89,15 @@ export function loadGameState(): GameState | null {
       "stations" in saved &&
       "lines" in saved
     ) {
-      return saved as GameState;
+      const gameState = saved as GameState;
+
+      // Ensure simulationTime exists (for backward compatibility)
+      if (!gameState.simulationTime || isNaN(gameState.simulationTime)) {
+        const startDate = new Date("2025-01-01T08:00:00");
+        gameState.simulationTime = startDate.getTime();
+      }
+
+      return gameState;
     }
   } catch (e) {
     console.error("Failed to load saved game:", e);

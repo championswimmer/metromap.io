@@ -63,12 +63,14 @@ export class MetroBuildingScreen extends Container {
 
   private titleLabel: Label;
   private instructionLabel: Label;
+  private clockLabel: Label;
 
   private addStationButton: FlatButton;
   private removeStationButton: FlatButton;
   private addLineButton: FlatButton;
   private completeLineButton: FlatButton;
   private resetButton: FlatButton;
+  private startSimulationButton: FlatButton;
   private showResidentialButton: FlatButton;
   private showOfficeButton: FlatButton;
   private showDefaultButton: FlatButton;
@@ -117,6 +119,17 @@ export class MetroBuildingScreen extends Container {
       },
     });
     this.addChild(this.instructionLabel);
+
+    // Clock display
+    this.clockLabel = new Label({
+      text: this.formatDateTime(new Date("2025-01-01T08:00:00")),
+      style: {
+        fontSize: 20,
+        fill: 0x88ccff,
+        fontFamily: "monospace",
+      },
+    });
+    this.addChild(this.clockLabel);
 
     // Map display container
     this.mapContainer = new Container();
@@ -201,6 +214,17 @@ export class MetroBuildingScreen extends Container {
     });
     this.resetButton.onPress.connect(() => this.resetGame());
     this.addChild(this.resetButton);
+
+    // Start Simulation button
+    this.startSimulationButton = new FlatButton({
+      text: "Start Simulation",
+      width: 160,
+      height: 50,
+      fontSize: 18,
+      backgroundColor: 0x22aa66,
+    });
+    this.startSimulationButton.onPress.connect(() => this.startSimulation());
+    this.addChild(this.startSimulationButton);
 
     // Create color picker buttons
     this.createColorButtons();
@@ -392,6 +416,45 @@ export class MetroBuildingScreen extends Container {
   }
 
   /**
+   * Format date and time for display
+   */
+  private formatDateTime(date: Date): string {
+    // Check if date is valid
+    if (!date || isNaN(date.getTime())) {
+      const defaultDate = new Date("2025-01-01T08:00:00");
+      return this.formatDateTime(defaultDate);
+    }
+
+    const day = date.getDate().toString().padStart(2, "0");
+    const month = (date.getMonth() + 1).toString().padStart(2, "0");
+    const year = date.getFullYear();
+    const hours = date.getHours().toString().padStart(2, "0");
+    const minutes = date.getMinutes().toString().padStart(2, "0");
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+  }
+
+  /**
+   * Start the simulation
+   */
+  private async startSimulation(): Promise<void> {
+    // Save current state
+    saveGameState(this.gameState);
+
+    // Import and navigate to simulation screen
+    const { MetroSimulationScreen } = await import("./MetroSimulationScreen");
+    const { engine } = await import("../getEngine");
+
+    await engine().navigation.showScreen(MetroSimulationScreen);
+    const screen = engine().navigation.currentScreen as InstanceType<
+      typeof MetroSimulationScreen
+    >;
+    if (screen && screen.setGameState) {
+      screen.setGameState(this.gameState);
+      screen.startSimulation();
+    }
+  }
+
+  /**
    * Set the map to display
    */
   public setMap(map: MapGrid): void {
@@ -400,6 +463,13 @@ export class MetroBuildingScreen extends Container {
     this.mapRenderer.renderMap(map);
     this.drawMapBackground();
     this.drawLines();
+
+    // Update clock display
+    const time =
+      this.gameState.simulationTime ||
+      new Date("2025-01-01T08:00:00").getTime();
+    const currentDate = new Date(time);
+    this.clockLabel.text = this.formatDateTime(currentDate);
   }
 
   /**
@@ -407,10 +477,23 @@ export class MetroBuildingScreen extends Container {
    */
   public setGameState(gameState: GameState): void {
     this.gameState = gameState;
+
+    // Ensure simulationTime is valid
+    if (
+      !this.gameState.simulationTime ||
+      isNaN(this.gameState.simulationTime)
+    ) {
+      this.gameState.simulationTime = new Date("2025-01-01T08:00:00").getTime();
+    }
+
     this.mapRenderer.renderMap(gameState.map);
     this.drawMapBackground();
     this.drawStations();
     this.drawLines();
+
+    // Update clock display
+    const currentDate = new Date(this.gameState.simulationTime);
+    this.clockLabel.text = this.formatDateTime(currentDate);
   }
 
   /**
@@ -1010,6 +1093,10 @@ export class MetroBuildingScreen extends Container {
     this.titleLabel.x = centerX;
     this.titleLabel.y = 30;
 
+    // Clock at top right (left of reset button)
+    this.clockLabel.x = width - 280;
+    this.clockLabel.y = 35;
+
     // Reset button at top right
     this.resetButton.x = width - 120;
     this.resetButton.y = 30;
@@ -1057,6 +1144,10 @@ export class MetroBuildingScreen extends Container {
     this.showBothButton.x = centerX + 440;
     this.showBothButton.y = bottomY;
 
+    // Start Simulation button (center bottom, below other controls)
+    this.startSimulationButton.x = centerX - 80;
+    this.startSimulationButton.y = bottomY + 60;
+
     // Map display - centered
     const mapWidth = this.mapRenderer.getMapWidth();
     const mapHeight = this.mapRenderer.getMapHeight();
@@ -1080,10 +1171,12 @@ export class MetroBuildingScreen extends Container {
     const elementsToAnimate = [
       this.titleLabel,
       this.instructionLabel,
+      this.clockLabel,
       this.addStationButton,
       this.removeStationButton,
       this.addLineButton,
       this.resetButton,
+      this.startSimulationButton,
       this.showDefaultButton,
       this.showResidentialButton,
       this.showOfficeButton,
