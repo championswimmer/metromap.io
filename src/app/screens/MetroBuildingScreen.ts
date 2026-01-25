@@ -12,6 +12,20 @@ import type { Station } from "../game/models/Station";
 import { generateStationId } from "../game/models/Station";
 import type { GameState } from "../game/models/GameState";
 import { createGameState } from "../game/models/GameState";
+import type { MetroLine, LineColor } from "../game/models/MetroLine";
+import {
+  LINE_COLORS,
+  LINE_COLOR_HEX,
+  generateLineId,
+  canAddStationToLine,
+  isLineLoop,
+} from "../game/models/MetroLine";
+import {
+  calculateSegmentPath,
+  DIRECTION_VECTORS,
+  Direction,
+} from "../game/pathfinding/LinePath";
+import type { LineSegment, Waypoint } from "../game/pathfinding/LinePath";
 import { FlatButton } from "../ui/FlatButton";
 import { Label } from "../ui/Label";
 
@@ -20,8 +34,11 @@ const STATION_RADIUS = TILE_SIZE * 0.5; // 50% of square side
 const STATION_COLOR = 0xffffff;
 const STATION_BORDER_COLOR = 0x000000;
 const STATION_BORDER_WIDTH = 2;
+const LINE_WIDTH = 4;
+const LINE_OFFSET = 2; // Offset for parallel lines
 
 type StationMode = "NONE" | "ADDING" | "REMOVING";
+type LineMode = "NONE" | "BUILDING";
 
 export class MetroBuildingScreen extends Container {
   /** Assets bundles required by this screen */
@@ -32,18 +49,33 @@ export class MetroBuildingScreen extends Container {
 
   private addStationButton: FlatButton;
   private removeStationButton: FlatButton;
+  private addLineButton: FlatButton;
+  private completeLineButton: FlatButton;
   private showResidentialButton: FlatButton;
   private showOfficeButton: FlatButton;
   private showDefaultButton: FlatButton;
   private showBothButton: FlatButton;
 
+  private colorButtons: Map<LineColor, FlatButton> = new Map();
+
   private mapRenderer: MapRenderer;
   private mapContainer: Container;
   private mapBackground: Graphics;
+  private linesLayer: Graphics;
   private stationsLayer: Graphics;
 
   private gameState!: GameState;
   private stationMode: StationMode = "NONE";
+  private lineMode: LineMode = "NONE";
+
+  // Line building state
+  private currentLine: {
+    color: LineColor | null;
+    stationIds: string[];
+  } = {
+    color: null,
+    stationIds: [],
+  };
 
   constructor() {
     super();
@@ -80,7 +112,11 @@ export class MetroBuildingScreen extends Container {
     this.mapRenderer = new MapRenderer();
     this.mapContainer.addChild(this.mapRenderer);
 
-    // Stations layer (drawn on top of map)
+    // Lines layer (drawn between map and stations)
+    this.linesLayer = new Graphics();
+    this.mapContainer.addChild(this.linesLayer);
+
+    // Stations layer (drawn on top of lines)
     this.stationsLayer = new Graphics();
     this.mapContainer.addChild(this.stationsLayer);
 
@@ -113,6 +149,32 @@ export class MetroBuildingScreen extends Container {
       this.toggleStationMode("REMOVING"),
     );
     this.addChild(this.removeStationButton);
+
+    // Add line button
+    this.addLineButton = new FlatButton({
+      text: "+ Line",
+      width: 100,
+      height: 50,
+      fontSize: 18,
+      backgroundColor: 0x9b59b6,
+    });
+    this.addLineButton.onPress.connect(() => this.startBuildingLine());
+    this.addChild(this.addLineButton);
+
+    // Complete line button
+    this.completeLineButton = new FlatButton({
+      text: "Complete",
+      width: 100,
+      height: 50,
+      fontSize: 18,
+      backgroundColor: 0x27ae60,
+    });
+    this.completeLineButton.onPress.connect(() => this.completeLine());
+    this.completeLineButton.visible = false;
+    this.addChild(this.completeLineButton);
+
+    // Create color picker buttons
+    this.createColorButtons();
 
     // Visualization mode buttons
     this.showDefaultButton = new FlatButton({
@@ -165,6 +227,120 @@ export class MetroBuildingScreen extends Container {
   }
 
   /**
+   * Create color picker buttons for line creation
+   */
+  private createColorButtons(): void {
+    LINE_COLORS.forEach((color) => {
+      const button = new FlatButton({
+        text: color.charAt(0).toUpperCase() + color.slice(1),
+        width: 80,
+        height: 35,
+        fontSize: 14,
+        backgroundColor: LINE_COLOR_HEX[color],
+      });
+      button.onPress.connect(() => this.selectLineColor(color));
+      button.visible = false; // Hidden until line building starts
+      this.addChild(button);
+      this.colorButtons.set(color, button);
+    });
+  }
+
+  /**
+   * Start building a new line
+   */
+  private startBuildingLine(): void {
+    if (this.lineMode === "BUILDING") return;
+
+    // Reset station modes
+    this.stationMode = "NONE";
+    this.lineMode = "BUILDING";
+
+    // Reset current line
+    this.currentLine = {
+      color: null,
+      stationIds: [],
+    };
+
+    // Show color picker
+    this.showColorPicker();
+
+    // Update UI
+    this.addLineButton.alpha = 0.6;
+    this.addStationButton.alpha = 0.6;
+    this.removeStationButton.alpha = 0.6;
+    this.instructionLabel.text = "Select a color for your new line";
+  }
+
+  /**
+   * Show color picker buttons
+   */
+  private showColorPicker(): void {
+    const usedColors = new Set(this.gameState.lines.map((l) => l.color));
+
+    this.colorButtons.forEach((button, color) => {
+      const isUsed = usedColors.has(color);
+      button.visible = true;
+      button.alpha = isUsed ? 0.3 : 1.0;
+      button.eventMode = isUsed ? "none" : "static";
+    });
+  }
+
+  /**
+   * Hide color picker buttons
+   */
+  private hideColorPicker(): void {
+    this.colorButtons.forEach((button) => {
+      button.visible = false;
+    });
+  }
+
+  /**
+   * Select a color for the current line
+   */
+  private selectLineColor(color: LineColor): void {
+    this.currentLine.color = color;
+    this.hideColorPicker();
+    this.completeLineButton.visible = true;
+    this.instructionLabel.text =
+      "Click stations to build your line, then click Complete";
+  }
+
+  /**
+   * Complete the current line
+   */
+  private completeLine(): void {
+    if (!this.currentLine.color || this.currentLine.stationIds.length < 2) {
+      console.log("Need at least 2 stations to complete a line");
+      return;
+    }
+
+    // Create the line
+    const line: MetroLine = {
+      id: generateLineId(),
+      color: this.currentLine.color,
+      stationIds: this.currentLine.stationIds,
+      isLoop: isLineLoop(this.currentLine.stationIds),
+    };
+
+    this.gameState.lines.push(line);
+    console.log(
+      `Created ${line.color} line with ${line.stationIds.length} stations`,
+    );
+
+    // Reset state
+    this.lineMode = "NONE";
+    this.currentLine = { color: null, stationIds: [] };
+    this.completeLineButton.visible = false;
+    this.addLineButton.alpha = 1.0;
+    this.addStationButton.alpha = 0.8;
+    this.removeStationButton.alpha = 0.8;
+    this.instructionLabel.text = "Click + or - to add or remove stations";
+
+    // Redraw
+    this.drawLines();
+  }
+
+  /**
    * Set the map to display
    */
   public setMap(map: MapGrid): void {
@@ -172,6 +348,7 @@ export class MetroBuildingScreen extends Container {
     this.gameState = createGameState(map.seed, map);
     this.mapRenderer.renderMap(map);
     this.drawMapBackground();
+    this.drawLines();
   }
 
   /**
@@ -209,14 +386,14 @@ export class MetroBuildingScreen extends Container {
   /**
    * Handle map click to add or remove stations
    */
+  /**
+   * Handle map click to add/remove stations or build lines
+   */
   private onMapClick(event: FederatedPointerEvent): void {
-    if (this.stationMode === "NONE") return;
-
     // Get click position relative to map renderer
     const localPos = this.mapRenderer.toLocal(event.global);
 
     // Convert to vertex coordinates
-    // Vertices are at the intersections, so we round to nearest vertex
     const vertexX = Math.round(localPos.x / TILE_SIZE);
     const vertexY = Math.round(localPos.y / TILE_SIZE);
 
@@ -230,11 +407,54 @@ export class MetroBuildingScreen extends Container {
       return;
     }
 
+    // Handle line building mode
+    if (this.lineMode === "BUILDING" && this.currentLine.color) {
+      this.handleLineStationClick(vertexX, vertexY);
+      return;
+    }
+
+    // Handle station modes
+    if (this.stationMode === "NONE") return;
+
     if (this.stationMode === "ADDING") {
       this.handleAddStation(vertexX, vertexY);
     } else if (this.stationMode === "REMOVING") {
       this.handleRemoveStation(vertexX, vertexY);
     }
+  }
+
+  /**
+   * Handle clicking a station while building a line
+   */
+  private handleLineStationClick(vertexX: number, vertexY: number): void {
+    const stationId = generateStationId(vertexX, vertexY);
+
+    // Check if this vertex has a station
+    if (!this.hasStationAt(vertexX, vertexY)) {
+      console.log("No station at this vertex");
+      return;
+    }
+
+    // Check if we can add this station to the line
+    if (!canAddStationToLine(this.currentLine.stationIds, stationId)) {
+      console.log("Station already in line (or would create invalid path)");
+      return;
+    }
+
+    // Add station to line
+    this.currentLine.stationIds.push(stationId);
+    console.log(`Added station ${stationId} to line`);
+
+    // Check if we closed a loop
+    if (
+      this.currentLine.stationIds.length > 2 &&
+      stationId === this.currentLine.stationIds[0]
+    ) {
+      console.log("Loop closed!");
+    }
+
+    // Redraw to show progress
+    this.drawLines();
   }
 
   /**
@@ -342,6 +562,195 @@ export class MetroBuildingScreen extends Container {
   }
 
   /**
+   * Draw all metro lines
+   */
+  private drawLines(): void {
+    this.linesLayer.clear();
+
+    // Draw completed lines
+    this.gameState.lines.forEach((line, lineIndex) => {
+      this.drawLine(line, lineIndex);
+    });
+
+    // Draw current line being built
+    if (
+      this.lineMode === "BUILDING" &&
+      this.currentLine.color &&
+      this.currentLine.stationIds.length > 0
+    ) {
+      const tempLine: MetroLine = {
+        id: "temp",
+        color: this.currentLine.color,
+        stationIds: this.currentLine.stationIds,
+        isLoop: false,
+      };
+      this.drawLine(tempLine, this.gameState.lines.length, true);
+    }
+  }
+
+  /**
+   * Draw a single metro line
+   */
+  /**
+   * Draw a single metro line using Harry Beck style rendering
+   */
+  private drawLine(
+    line: MetroLine,
+    lineIndex: number,
+    isTemp: boolean = false,
+  ): void {
+    if (line.stationIds.length < 2) return;
+
+    const color = LINE_COLOR_HEX[line.color];
+    const offset = lineIndex * LINE_OFFSET;
+
+    // Get station objects
+    const stations = line.stationIds
+      .map((id) => this.gameState.stations.find((s) => s.id === id))
+      .filter((s): s is Station => s !== undefined);
+
+    if (stations.length < 2) return;
+
+    // Calculate all segments with waypoints
+    const segments: LineSegment[] = [];
+    let previousAngle: Direction | null = null;
+
+    for (let i = 0; i < stations.length - 1; i++) {
+      const from = stations[i];
+      const to = stations[i + 1];
+
+      const segment = calculateSegmentPath(from, to, previousAngle);
+      segments.push(segment);
+
+      previousAngle = segment.exitAngle;
+    }
+
+    // Render the complete line
+    this.renderSegmentsToCanvas(segments, color, offset, isTemp);
+  }
+
+  /**
+   * Render line segments to canvas with bezier curves at bends
+   */
+  private renderSegmentsToCanvas(
+    segments: LineSegment[],
+    color: number,
+    _offset: number, // TODO: Implement parallel line offset
+    isTemp: boolean,
+  ): void {
+    if (segments.length === 0) return;
+
+    const lineWidth = LINE_WIDTH;
+    const cornerRadius = lineWidth * 2;
+    const tightness = 0.5;
+
+    this.linesLayer.moveTo(
+      segments[0].waypoints[0].x * TILE_SIZE,
+      segments[0].waypoints[0].y * TILE_SIZE,
+    );
+
+    for (const segment of segments) {
+      const waypoints = segment.waypoints;
+
+      for (let j = 0; j < waypoints.length - 1; j++) {
+        const current = waypoints[j];
+        const next = waypoints[j + 1];
+
+        // Convert to pixel coordinates
+        const nextX = next.x * TILE_SIZE;
+        const nextY = next.y * TILE_SIZE;
+
+        if (current.type === "BEND" || next.type === "BEND") {
+          // Draw curved segment at bend
+          const bendWaypoint = current.type === "BEND" ? current : next;
+          const incomingAngle = bendWaypoint.incomingAngle ?? Direction.EAST;
+          const outgoingAngle = bendWaypoint.outgoingAngle ?? Direction.EAST;
+
+          const curve = this.createBendCurve(
+            bendWaypoint,
+            incomingAngle,
+            outgoingAngle,
+            cornerRadius,
+            tightness,
+          );
+
+          // Line to curve start
+          this.linesLayer.lineTo(
+            curve.start.x * TILE_SIZE,
+            curve.start.y * TILE_SIZE,
+          );
+
+          // Cubic bezier curve
+          this.linesLayer.bezierCurveTo(
+            curve.control1.x * TILE_SIZE,
+            curve.control1.y * TILE_SIZE,
+            curve.control2.x * TILE_SIZE,
+            curve.control2.y * TILE_SIZE,
+            curve.end.x * TILE_SIZE,
+            curve.end.y * TILE_SIZE,
+          );
+        } else {
+          // Straight line segment
+          this.linesLayer.lineTo(nextX, nextY);
+        }
+      }
+    }
+
+    this.linesLayer.stroke({
+      width: lineWidth,
+      color: color,
+      alpha: isTemp ? 0.6 : 1.0,
+    });
+  }
+
+  /**
+   * Create bezier curve for a bend
+   */
+  private createBendCurve(
+    waypoint: Waypoint,
+    incomingAngle: Direction,
+    outgoingAngle: Direction,
+    cornerRadius: number,
+    tightness: number,
+  ): {
+    start: { x: number; y: number };
+    control1: { x: number; y: number };
+    control2: { x: number; y: number };
+    end: { x: number; y: number };
+  } {
+    const radius = cornerRadius / TILE_SIZE; // Convert to grid units
+
+    // Calculate where curve starts (along incoming direction)
+    const inDir = DIRECTION_VECTORS[incomingAngle];
+    const curveStart = {
+      x: waypoint.x - radius * inDir.dx,
+      y: waypoint.y - radius * inDir.dy,
+    };
+
+    // Calculate where curve ends (along outgoing direction)
+    const outDir = DIRECTION_VECTORS[outgoingAngle];
+    const curveEnd = {
+      x: waypoint.x + radius * outDir.dx,
+      y: waypoint.y + radius * outDir.dy,
+    };
+
+    // Calculate control points for smooth curve
+    const controlDistance = radius * tightness;
+
+    const control1 = {
+      x: curveStart.x + controlDistance * inDir.dx,
+      y: curveStart.y + controlDistance * inDir.dy,
+    };
+
+    const control2 = {
+      x: curveEnd.x - controlDistance * outDir.dx,
+      y: curveEnd.y - controlDistance * outDir.dy,
+    };
+
+    return { start: curveStart, control1, control2, end: curveEnd };
+  }
+
+  /**
    * Set visualization mode
    */
   private setVisualizationMode(
@@ -418,24 +827,40 @@ export class MetroBuildingScreen extends Container {
     // Control buttons at bottom
     const bottomY = height - 100;
 
-    // Station control buttons on left
-    this.addStationButton.x = centerX - 310;
+    // Station control buttons
+    this.addStationButton.x = centerX - 380;
     this.addStationButton.y = bottomY;
 
-    this.removeStationButton.x = centerX - 180;
+    this.removeStationButton.x = centerX - 250;
     this.removeStationButton.y = bottomY;
 
+    // Line control buttons
+    this.addLineButton.x = centerX - 120;
+    this.addLineButton.y = bottomY;
+
+    this.completeLineButton.x = centerX - 10;
+    this.completeLineButton.y = bottomY;
+
+    // Color picker buttons (arranged in a row above main buttons)
+    const colorY = bottomY - 50;
+    let colorX = centerX - 480;
+    this.colorButtons.forEach((button) => {
+      button.x = colorX;
+      button.y = colorY;
+      colorX += 85;
+    });
+
     // Visualization mode buttons on right
-    this.showDefaultButton.x = centerX - 45;
+    this.showDefaultButton.x = centerX + 100;
     this.showDefaultButton.y = bottomY;
 
-    this.showResidentialButton.x = centerX + 65;
+    this.showResidentialButton.x = centerX + 210;
     this.showResidentialButton.y = bottomY;
 
-    this.showOfficeButton.x = centerX + 185;
+    this.showOfficeButton.x = centerX + 330;
     this.showOfficeButton.y = bottomY;
 
-    this.showBothButton.x = centerX + 295;
+    this.showBothButton.x = centerX + 440;
     this.showBothButton.y = bottomY;
 
     // Map display - centered
@@ -463,6 +888,7 @@ export class MetroBuildingScreen extends Container {
       this.instructionLabel,
       this.addStationButton,
       this.removeStationButton,
+      this.addLineButton,
       this.showDefaultButton,
       this.showResidentialButton,
       this.showOfficeButton,

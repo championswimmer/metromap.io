@@ -5,12 +5,14 @@
 
 import type { MapGrid } from "./MapGrid";
 import type { Station } from "./Station";
+import type { MetroLine } from "./MetroLine";
 
 export interface GameState {
   seed: number;
   map: MapGrid;
   stations: Station[];
-  // Future: lines, trains, passengers, score, etc.
+  lines: MetroLine[];
+  // Future: trains, passengers, score, etc.
 }
 
 /**
@@ -21,6 +23,7 @@ export function createGameState(seed: number, map: MapGrid): GameState {
     seed,
     map,
     stations: [],
+    lines: [],
   };
 }
 
