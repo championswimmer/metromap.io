@@ -1,6 +1,9 @@
 /**
  * Harry Beck style pathfinding for metro lines
- * Lines follow grid or 45-degree diagonals with smooth bezier curves at bends
+ * Uses Octilinear Routing with Corner Filleting
+ *
+ * Lines are restricted to three angles: horizontal, vertical, and 45° diagonal
+ * Bends are created at "knee" points where direction changes
  */
 
 import type { Station } from "../models/Station";
@@ -49,13 +52,80 @@ export interface LineSegment {
 }
 
 /**
- * Calculate angle difference normalized to -180 to 180 range
+ * Create a normalized segment key from two station IDs
+ * The key is the same regardless of direction (A->B === B->A)
  */
-function angleDifference(angle1: number, angle2: number): number {
-  let diff = angle1 - angle2;
-  while (diff > 180) diff -= 360;
-  while (diff < -180) diff += 360;
-  return diff;
+export function createSegmentKey(
+  stationId1: string,
+  stationId2: string,
+): string {
+  return [stationId1, stationId2].sort().join("-");
+}
+
+/**
+ * Determine the primary orientation of a segment
+ * Used to decide offset direction for parallel lines
+ */
+export function getSegmentOrientation(
+  dx: number,
+  dy: number,
+): "HORIZONTAL" | "VERTICAL" | "DIAGONAL" {
+  const absDx = Math.abs(dx);
+  const absDy = Math.abs(dy);
+
+  if (absDx > absDy) return "HORIZONTAL";
+  if (absDy > absDx) return "VERTICAL";
+  return "DIAGONAL";
+}
+
+/**
+ * Get the perpendicular offset vector for a given direction
+ * Returns normalized (dx, dy) perpendicular to the line direction
+ * The perpendicular is chosen to be consistent (clockwise rotation)
+ */
+export function getPerpendicularOffset(direction: Direction): {
+  dx: number;
+  dy: number;
+} {
+  // For diagonals, normalize to unit length (divide by sqrt(2))
+  const diag = 1 / Math.SQRT2;
+
+  // Rotate 90 degrees clockwise to get perpendicular
+  switch (direction) {
+    case Direction.EAST:
+      return { dx: 0, dy: 1 }; // Offset in Y
+    case Direction.WEST:
+      return { dx: 0, dy: -1 }; // Offset in Y (opposite)
+    case Direction.SOUTH:
+      return { dx: -1, dy: 0 }; // Offset in X
+    case Direction.NORTH:
+      return { dx: 1, dy: 0 }; // Offset in X (opposite)
+    case Direction.SOUTHEAST:
+      return { dx: -diag, dy: -diag }; // Perpendicular to SE is SW direction
+    case Direction.NORTHWEST:
+      return { dx: diag, dy: diag }; // Perpendicular to NW is NE direction
+    case Direction.SOUTHWEST:
+      return { dx: -diag, dy: diag }; // Perpendicular to SW is NW direction
+    case Direction.NORTHEAST:
+      return { dx: diag, dy: -diag }; // Perpendicular to NE is SE direction
+    default:
+      return { dx: 0, dy: 1 };
+  }
+}
+
+/**
+ * Get direction enum from dx/dy signs
+ */
+function getDirection(dx: number, dy: number): Direction {
+  if (dx > 0 && dy === 0) return Direction.EAST;
+  if (dx > 0 && dy > 0) return Direction.SOUTHEAST;
+  if (dx === 0 && dy > 0) return Direction.SOUTH;
+  if (dx < 0 && dy > 0) return Direction.SOUTHWEST;
+  if (dx < 0 && dy === 0) return Direction.WEST;
+  if (dx < 0 && dy < 0) return Direction.NORTHWEST;
+  if (dx === 0 && dy < 0) return Direction.NORTH;
+  if (dx > 0 && dy < 0) return Direction.NORTHEAST;
+  return Direction.EAST; // fallback
 }
 
 /**
@@ -78,188 +148,206 @@ export function calculateSnapAngle(from: Station, to: Station): Direction {
   const rawAngle = (Math.atan2(dy, dx) * 180) / Math.PI;
 
   // Snap to nearest 45-degree increment
-  const possibleAngles = [0, 45, 90, 135, 180, 225, 270, 315];
+  const possibleAngles = [0, 45, 90, 135, 180, -180, -135, -90, -45];
 
   let snappedAngle = possibleAngles[0];
-  let minDiff = Math.abs(angleDifference(rawAngle, possibleAngles[0]));
+  let minDiff = Math.abs(rawAngle - possibleAngles[0]);
 
   for (const angle of possibleAngles) {
-    const diff = Math.abs(angleDifference(rawAngle, angle));
+    const diff = Math.abs(rawAngle - angle);
     if (diff < minDiff) {
       minDiff = diff;
       snappedAngle = angle;
     }
   }
 
-  return snappedAngle as Direction;
+  // Convert to our Direction enum (0-315 range)
+  const normalized = normalizeAngle(snappedAngle);
+  return normalized as Direction;
 }
 
 /**
- * Solve line intersection point
+ * Determine the alignment type between two stations
  */
-function solveLineIntersection(
-  x1: number,
-  y1: number,
-  dx1: number,
-  dy1: number,
-  x2: number,
-  y2: number,
-  dx2: number,
-  dy2: number,
-): { x: number; y: number } | null {
-  const denominator = dx1 * dy2 - dy1 * dx2;
+function getAlignmentType(
+  dx: number,
+  dy: number,
+): "HORIZONTAL" | "VERTICAL" | "DIAGONAL" | "MISALIGNED" {
+  const absDx = Math.abs(dx);
+  const absDy = Math.abs(dy);
 
-  if (Math.abs(denominator) < 0.0001) {
-    return null; // Parallel lines
-  }
-
-  const t1 = ((x2 - x1) * dy2 - (y2 - y1) * dx2) / denominator;
-
-  // Check if t1 is positive (bend is ahead of 'from' station)
-  if (t1 < 0.5) {
-    return null; // Too close to station
-  }
-
-  return {
-    x: x1 + t1 * dx1,
-    y: y1 + t1 * dy1,
-  };
+  if (absDy === 0) return "HORIZONTAL";
+  if (absDx === 0) return "VERTICAL";
+  if (absDx === absDy) return "DIAGONAL";
+  return "MISALIGNED";
 }
 
 /**
- * Calculate optimal bend position between two stations
+ * Calculate the knee point using the "greedy diagonal" approach
+ *
+ * The greedy diagonal algorithm:
+ * 1. Find the shorter of |dx| and |dy|
+ * 2. Travel diagonally for that distance (clearing the shorter axis)
+ * 3. Then travel straight (H or V) for the remaining distance
+ *
+ * This naturally creates 45-degree bends in the Harry Beck style
  */
-function calculateOptimalBendPosition(
+function calculateKneePoint(
   from: Station,
   to: Station,
-  angle1: Direction,
-  angle2: Direction,
-): { x: number; y: number } {
-  const dir1 = DIRECTION_VECTORS[angle1];
-  const dir2 = DIRECTION_VECTORS[angle2];
+): { x: number; y: number; diagonalFirst: boolean } {
+  const dx = to.vertexX - from.vertexX;
+  const dy = to.vertexY - from.vertexY;
 
-  // Try to find intersection of two rays
-  const intersection = solveLineIntersection(
-    from.vertexX,
-    from.vertexY,
-    dir1.dx,
-    dir1.dy,
-    to.vertexX,
-    to.vertexY,
-    -dir2.dx,
-    -dir2.dy,
-  );
+  const absDx = Math.abs(dx);
+  const absDy = Math.abs(dy);
 
-  if (intersection) {
-    // Verify bend isn't too far from path
-    const distToFrom = Math.hypot(
-      intersection.x - from.vertexX,
-      intersection.y - from.vertexY,
-    );
-    const distToTo = Math.hypot(
-      intersection.x - to.vertexX,
-      intersection.y - to.vertexY,
-    );
-    const directDist = Math.hypot(
-      to.vertexX - from.vertexX,
-      to.vertexY - from.vertexY,
-    );
+  // Determine direction signs
+  const signX = dx > 0 ? 1 : -1;
+  const signY = dy > 0 ? 1 : -1;
 
-    // If bend is reasonable, use it
-    if (distToFrom + distToTo < directDist * 2) {
-      return intersection;
+  // Use greedy diagonal: travel diagonally for the shorter distance
+  const diagonalDistance = Math.min(absDx, absDy);
+
+  // Decide whether to go diagonal-first or straight-first
+  // Diagonal-first is the classic Beck style
+  const diagonalFirst = true;
+
+  let kneeX: number;
+  let kneeY: number;
+
+  if (diagonalFirst) {
+    // Start diagonal, end straight
+    kneeX = from.vertexX + signX * diagonalDistance;
+    kneeY = from.vertexY + signY * diagonalDistance;
+  } else {
+    // Start straight, end diagonal
+    if (absDx > absDy) {
+      // Go horizontal first, then diagonal
+      const straightDistance = absDx - absDy;
+      kneeX = from.vertexX + signX * straightDistance;
+      kneeY = from.vertexY;
+    } else {
+      // Go vertical first, then diagonal
+      const straightDistance = absDy - absDx;
+      kneeX = from.vertexX;
+      kneeY = from.vertexY + signY * straightDistance;
     }
   }
 
-  // Fallback: create bend at midpoint
-  return {
-    x: (from.vertexX + to.vertexX) / 2,
-    y: (from.vertexY + to.vertexY) / 2,
-  };
+  return { x: kneeX, y: kneeY, diagonalFirst };
 }
 
 /**
- * Generate waypoints between two stations
- */
-function generateWaypoints(
-  from: Station,
-  to: Station,
-  entryAngle: Direction,
-  targetAngle: Direction,
-): Waypoint[] {
-  const waypoints: Waypoint[] = [];
-
-  // Start at 'from' station
-  waypoints.push({
-    x: from.vertexX,
-    y: from.vertexY,
-    type: "STATION",
-    outgoingAngle: entryAngle,
-  });
-
-  // If entry angle matches target angle, straight line
-  if (entryAngle === targetAngle) {
-    waypoints.push({
-      x: to.vertexX,
-      y: to.vertexY,
-      type: "STATION",
-      incomingAngle: targetAngle,
-    });
-    return waypoints;
-  }
-
-  // Need to insert bend
-  const bendPoint = calculateOptimalBendPosition(
-    from,
-    to,
-    entryAngle,
-    targetAngle,
-  );
-
-  waypoints.push({
-    x: bendPoint.x,
-    y: bendPoint.y,
-    type: "BEND",
-    incomingAngle: entryAngle,
-    outgoingAngle: targetAngle,
-  });
-
-  // End at 'to' station
-  waypoints.push({
-    x: to.vertexX,
-    y: to.vertexY,
-    type: "STATION",
-    incomingAngle: targetAngle,
-  });
-
-  return waypoints;
-}
-
-/**
- * Calculate path segment between two stations
+ * Calculate path segment between two stations using octilinear routing
  */
 export function calculateSegmentPath(
   from: Station,
   to: Station,
-  previousAngle: Direction | null,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _previousAngle: Direction | null,
 ): LineSegment {
-  // Determine ideal direct angle
-  const directAngle = calculateSnapAngle(from, to);
+  const dx = to.vertexX - from.vertexX;
+  const dy = to.vertexY - from.vertexY;
 
-  // Entry angle at 'from' station
-  const entryAngle = previousAngle ?? directAngle;
+  const waypoints: Waypoint[] = [];
+  const alignment = getAlignmentType(dx, dy);
 
-  // Generate waypoints with bends
-  const waypoints = generateWaypoints(from, to, entryAngle, directAngle);
+  if (alignment !== "MISALIGNED") {
+    // Scenario 1: Straight shot (stations are aligned)
+    // Horizontal, vertical, or perfect diagonal - no bend needed
+    const direction = getDirection(
+      dx === 0 ? 0 : dx > 0 ? 1 : -1,
+      dy === 0 ? 0 : dy > 0 ? 1 : -1,
+    );
 
-  // Exit angle at 'to' station
-  const exitAngle = directAngle;
+    waypoints.push({
+      x: from.vertexX,
+      y: from.vertexY,
+      type: "STATION",
+      outgoingAngle: direction,
+    });
+
+    waypoints.push({
+      x: to.vertexX,
+      y: to.vertexY,
+      type: "STATION",
+      incomingAngle: direction,
+    });
+
+    return {
+      fromStation: from,
+      toStation: to,
+      entryAngle: direction,
+      exitAngle: direction,
+      waypoints,
+    };
+  }
+
+  // Scenario 2: 45-degree transition (misaligned stations)
+  // Use greedy diagonal approach to find the knee point
+  const knee = calculateKneePoint(from, to);
+
+  const absDx = Math.abs(dx);
+  const absDy = Math.abs(dy);
+  const signX = dx > 0 ? 1 : -1;
+  const signY = dy > 0 ? 1 : -1;
+
+  // Determine the two segment directions
+  let firstDirection: Direction;
+  let secondDirection: Direction;
+
+  if (knee.diagonalFirst) {
+    // First segment is diagonal (from start to knee)
+    firstDirection = getDirection(signX, signY);
+
+    // Second segment is straight (from knee to end)
+    if (absDx > absDy) {
+      // Remaining distance is horizontal
+      secondDirection = signX > 0 ? Direction.EAST : Direction.WEST;
+    } else {
+      // Remaining distance is vertical
+      secondDirection = signY > 0 ? Direction.SOUTH : Direction.NORTH;
+    }
+  } else {
+    // First segment is straight
+    if (absDx > absDy) {
+      firstDirection = signX > 0 ? Direction.EAST : Direction.WEST;
+    } else {
+      firstDirection = signY > 0 ? Direction.SOUTH : Direction.NORTH;
+    }
+    // Second segment is diagonal
+    secondDirection = getDirection(signX, signY);
+  }
+
+  // Build waypoints: Start -> Knee -> End
+  waypoints.push({
+    x: from.vertexX,
+    y: from.vertexY,
+    type: "STATION",
+    outgoingAngle: firstDirection,
+  });
+
+  waypoints.push({
+    x: knee.x,
+    y: knee.y,
+    type: "BEND",
+    incomingAngle: firstDirection,
+    outgoingAngle: secondDirection,
+  });
+
+  waypoints.push({
+    x: to.vertexX,
+    y: to.vertexY,
+    type: "STATION",
+    incomingAngle: secondDirection,
+  });
 
   return {
     fromStation: from,
     toStation: to,
-    entryAngle,
-    exitAngle,
+    entryAngle: firstDirection,
+    exitAngle: secondDirection,
     waypoints,
   };
 }
