@@ -365,16 +365,22 @@ export class MapPickerScreen extends Container {
 
     // Visualization mode buttons below map type label
     const vizButtonsY = controlsY + 85;
-    this.showDefaultButton.x = centerX - 165;
+    const buttonGap = 20;
+
+    // Total width: 100 + 120 + 100 + 100 + 3 * 20 = 480
+    // Start X = Center - 240
+
+    this.showDefaultButton.x = centerX - 240;
     this.showDefaultButton.y = vizButtonsY;
 
-    this.showResidentialButton.x = centerX - 55;
+    this.showResidentialButton.x = centerX - 240 + 100 + buttonGap;
     this.showResidentialButton.y = vizButtonsY;
 
-    this.showOfficeButton.x = centerX + 65;
+    this.showOfficeButton.x = centerX - 240 + 100 + buttonGap + 120 + buttonGap;
     this.showOfficeButton.y = vizButtonsY;
 
-    this.showBothButton.x = centerX + 175;
+    this.showBothButton.x =
+      centerX - 240 + 100 + buttonGap + 120 + buttonGap + 100 + buttonGap;
     this.showBothButton.y = vizButtonsY;
 
     // START button below visualization buttons

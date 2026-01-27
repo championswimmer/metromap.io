@@ -7,6 +7,7 @@ import { animate } from "motion";
 import { Container, Graphics, FederatedPointerEvent } from "pixi.js";
 
 import { MapRenderer } from "../game/MapRenderer";
+import { MetroRenderer, TILE_SIZE } from "../game/MetroRenderer";
 import type { MapGrid } from "../game/models/MapGrid";
 import type { Station } from "../game/models/Station";
 import { generateStationId } from "../game/models/Station";
@@ -26,33 +27,8 @@ import {
   canAddStationToLine,
   isLineLoop,
 } from "../game/models/MetroLine";
-import {
-  calculateSegmentPath,
-  calculateSnapAngle,
-  DIRECTION_VECTORS,
-  Direction,
-  createSegmentKey,
-  getSegmentOrientation,
-} from "../game/pathfinding/LinePath";
-import type { LineSegment, Waypoint } from "../game/pathfinding/LinePath";
-
-/**
- * Information about lines sharing a segment
- */
-interface SegmentSharingInfo {
-  lineIndices: number[]; // Indices of lines that share this segment
-  orientation: "HORIZONTAL" | "VERTICAL" | "DIAGONAL";
-}
 import { FlatButton } from "../ui/FlatButton";
 import { Label } from "../ui/Label";
-
-const TILE_SIZE = 16;
-const STATION_RADIUS = TILE_SIZE * 0.5; // 50% of square side
-const STATION_COLOR = 0xffffff;
-const STATION_BORDER_COLOR = 0x000000;
-const STATION_BORDER_WIDTH = 2;
-const LINE_WIDTH = 4;
-const LINE_OFFSET = 4; // Offset for parallel lines
 
 type StationMode = "NONE" | "ADDING" | "REMOVING";
 type LineMode = "NONE" | "BUILDING";
@@ -79,10 +55,9 @@ export class MetroBuildingScreen extends Container {
   private colorButtons: Map<LineColor, FlatButton> = new Map();
 
   private mapRenderer: MapRenderer;
+  private metroRenderer: MetroRenderer;
   private mapContainer: Container;
   private mapBackground: Graphics;
-  private linesLayer: Graphics;
-  private stationsLayer: Graphics;
 
   private gameState!: GameState;
   private stationMode: StationMode = "NONE";
@@ -143,13 +118,9 @@ export class MetroBuildingScreen extends Container {
     this.mapRenderer = new MapRenderer();
     this.mapContainer.addChild(this.mapRenderer);
 
-    // Lines layer (drawn between map and stations)
-    this.linesLayer = new Graphics();
-    this.mapContainer.addChild(this.linesLayer);
-
-    // Stations layer (drawn on top of lines)
-    this.stationsLayer = new Graphics();
-    this.mapContainer.addChild(this.stationsLayer);
+    // Metro Renderer (handles lines and stations)
+    this.metroRenderer = new MetroRenderer();
+    this.mapContainer.addChild(this.metroRenderer);
 
     // Make map interactive
     this.mapContainer.eventMode = "static";
@@ -397,7 +368,7 @@ export class MetroBuildingScreen extends Container {
     this.instructionLabel.text = "Click + or - to add or remove stations";
 
     // Redraw
-    this.drawLines();
+    this.updateMetroRenderer();
   }
 
   /**
@@ -463,7 +434,7 @@ export class MetroBuildingScreen extends Container {
     this.gameState = createGameState(map.seed, map);
     this.mapRenderer.renderMap(map);
     this.drawMapBackground();
-    this.drawLines();
+    this.updateMetroRenderer();
 
     // Update clock display
     const time =
@@ -489,8 +460,7 @@ export class MetroBuildingScreen extends Container {
 
     this.mapRenderer.renderMap(gameState.map);
     this.drawMapBackground();
-    this.drawStations();
-    this.drawLines();
+    this.updateMetroRenderer();
 
     // Update clock display
     const currentDate = new Date(this.gameState.simulationTime);
@@ -529,9 +499,6 @@ export class MetroBuildingScreen extends Container {
     }
   }
 
-  /**
-   * Handle map click to add or remove stations
-   */
   /**
    * Handle map click to add/remove stations or build lines
    */
@@ -600,7 +567,7 @@ export class MetroBuildingScreen extends Container {
     }
 
     // Redraw to show progress
-    this.drawLines();
+    this.updateMetroRenderer();
   }
 
   /**
@@ -643,7 +610,7 @@ export class MetroBuildingScreen extends Container {
     saveGameState(this.gameState);
 
     // Redraw stations
-    this.drawStations();
+    this.updateMetroRenderer();
   }
 
   /**
@@ -684,345 +651,36 @@ export class MetroBuildingScreen extends Container {
     );
 
     // Redraw stations
-    this.drawStations();
+    this.updateMetroRenderer();
   }
 
   /**
-   * Draw all stations
+   * Update all metro visual elements
    */
-  private drawStations(): void {
-    this.stationsLayer.clear();
+  private updateMetroRenderer(): void {
+    this.metroRenderer.renderStations(this.gameState.stations);
 
-    for (const station of this.gameState.stations) {
-      const px = station.vertexX * TILE_SIZE;
-      const py = station.vertexY * TILE_SIZE;
-
-      // Draw station circle
-      this.stationsLayer.circle(px, py, STATION_RADIUS);
-      this.stationsLayer.fill(STATION_COLOR);
-
-      // Draw border
-      this.stationsLayer.circle(px, py, STATION_RADIUS);
-      this.stationsLayer.stroke({
-        width: STATION_BORDER_WIDTH,
-        color: STATION_BORDER_COLOR,
-      });
-    }
-  }
-
-  /**
-   * Build a map of which segments are shared by which lines
-   * Returns a map: segmentKey -> { lineIndices, orientation }
-   */
-  private buildSegmentSharingMap(): Map<string, SegmentSharingInfo> {
-    const segmentMap = new Map<string, SegmentSharingInfo>();
-
-    // Process all completed lines
-    this.gameState.lines.forEach((line, lineIndex) => {
-      for (let i = 0; i < line.stationIds.length - 1; i++) {
-        const fromId = line.stationIds[i];
-        const toId = line.stationIds[i + 1];
-        const key = createSegmentKey(fromId, toId);
-
-        if (!segmentMap.has(key)) {
-          // Calculate orientation based on station positions
-          const fromStation = this.gameState.stations.find(
-            (s) => s.id === fromId,
-          );
-          const toStation = this.gameState.stations.find((s) => s.id === toId);
-
-          let orientation: "HORIZONTAL" | "VERTICAL" | "DIAGONAL" =
-            "HORIZONTAL";
-          if (fromStation && toStation) {
-            const dx = toStation.vertexX - fromStation.vertexX;
-            const dy = toStation.vertexY - fromStation.vertexY;
-            orientation = getSegmentOrientation(dx, dy);
-          }
-
-          segmentMap.set(key, { lineIndices: [], orientation });
-        }
-
-        segmentMap.get(key)!.lineIndices.push(lineIndex);
-      }
-    });
-
-    // Also include the current line being built
-    if (
-      this.lineMode === "BUILDING" &&
-      this.currentLine.color &&
-      this.currentLine.stationIds.length > 1
-    ) {
-      const tempLineIndex = this.gameState.lines.length;
-      for (let i = 0; i < this.currentLine.stationIds.length - 1; i++) {
-        const fromId = this.currentLine.stationIds[i];
-        const toId = this.currentLine.stationIds[i + 1];
-        const key = createSegmentKey(fromId, toId);
-
-        if (!segmentMap.has(key)) {
-          const fromStation = this.gameState.stations.find(
-            (s) => s.id === fromId,
-          );
-          const toStation = this.gameState.stations.find((s) => s.id === toId);
-
-          let orientation: "HORIZONTAL" | "VERTICAL" | "DIAGONAL" =
-            "HORIZONTAL";
-          if (fromStation && toStation) {
-            const dx = toStation.vertexX - fromStation.vertexX;
-            const dy = toStation.vertexY - fromStation.vertexY;
-            orientation = getSegmentOrientation(dx, dy);
-          }
-
-          segmentMap.set(key, { lineIndices: [], orientation });
-        }
-
-        segmentMap.get(key)!.lineIndices.push(tempLineIndex);
-      }
-    }
-
-    return segmentMap;
-  }
-
-  /**
-   * Draw all metro lines
-   */
-  private drawLines(): void {
-    this.linesLayer.clear();
-
-    // Build the segment sharing map
-    const segmentMap = this.buildSegmentSharingMap();
-
-    // Draw completed lines
-    this.gameState.lines.forEach((line, lineIndex) => {
-      this.drawLine(line, lineIndex, segmentMap, false);
-    });
-
-    // Draw current line being built
+    // Prepare temp line if needed
+    let tempLine: MetroLine | undefined;
     if (
       this.lineMode === "BUILDING" &&
       this.currentLine.color &&
       this.currentLine.stationIds.length > 0
     ) {
-      const tempLine: MetroLine = {
+      tempLine = {
         id: "temp",
         color: this.currentLine.color,
         stationIds: this.currentLine.stationIds,
         isLoop: false,
         trains: [],
       };
-      this.drawLine(tempLine, this.gameState.lines.length, segmentMap, true);
-    }
-  }
-
-  /**
-   * Draw a single metro line using Harry Beck style rendering
-   */
-  private drawLine(
-    line: MetroLine,
-    lineIndex: number,
-    segmentMap: Map<string, SegmentSharingInfo>,
-    isTemp: boolean = false,
-  ): void {
-    if (line.stationIds.length < 2) return;
-
-    const color = LINE_COLOR_HEX[line.color];
-
-    // Get station objects
-    const stations = line.stationIds
-      .map((id) => this.gameState.stations.find((s) => s.id === id))
-      .filter((s): s is Station => s !== undefined);
-
-    if (stations.length < 2) return;
-
-    // Calculate all segments with waypoints and their offsets
-    const segments: LineSegment[] = [];
-    const segmentOffsets: { offsetX: number; offsetY: number }[] = [];
-
-    for (let i = 0; i < stations.length - 1; i++) {
-      const from = stations[i];
-      const to = stations[i + 1];
-
-      // Look ahead to the next segment to optimize angles at intermediate stations
-      let nextAngle: Direction | null = null;
-      if (i < stations.length - 2) {
-        const nextStation = stations[i + 2];
-        nextAngle = calculateSnapAngle(to, nextStation);
-      }
-
-      const segment = calculateSegmentPath(from, to, nextAngle);
-      segments.push(segment);
-
-      // Calculate offset for this segment based on sharing info
-      const segmentKey = createSegmentKey(from.id, to.id);
-      const sharingInfo = segmentMap.get(segmentKey);
-
-      let offsetX = 0;
-      let offsetY = 0;
-
-      if (sharingInfo && sharingInfo.lineIndices.length > 1) {
-        const totalLines = sharingInfo.lineIndices.length;
-        const positionInList = sharingInfo.lineIndices.indexOf(lineIndex);
-
-        // Center the lines: positions range from -(n-1)/2 to +(n-1)/2
-        const centerOffset = (totalLines - 1) / 2;
-        const normalizedPosition = positionInList - centerOffset;
-
-        // Apply offset based on segment orientation (horizontal/vertical/diagonal)
-        // This uses the OVERALL direction from source to destination, not individual legs
-        const dx = to.vertexX - from.vertexX;
-        const dy = to.vertexY - from.vertexY;
-
-        // Scale the offset (LINE_OFFSET is in pixels, convert to grid units)
-        const offsetAmount = (normalizedPosition * LINE_OFFSET) / TILE_SIZE;
-
-        // For horizontal segments, offset in Y; for vertical, offset in X
-        // For diagonal, offset perpendicular to the diagonal
-        if (sharingInfo.orientation === "HORIZONTAL") {
-          // Horizontal segment: offset vertically
-          offsetY = offsetAmount;
-        } else if (sharingInfo.orientation === "VERTICAL") {
-          // Vertical segment: offset horizontally
-          offsetX = offsetAmount;
-        } else {
-          // Diagonal segment: offset perpendicular
-          // Perpendicular to (dx, dy) is (-dy, dx) normalized
-          const length = Math.sqrt(dx * dx + dy * dy);
-          if (length > 0) {
-            offsetX = (-dy / length) * offsetAmount;
-            offsetY = (dx / length) * offsetAmount;
-          }
-        }
-      }
-
-      segmentOffsets.push({ offsetX, offsetY });
     }
 
-    // Render the complete line with offsets
-    this.renderSegmentsToCanvas(segments, segmentOffsets, color, isTemp);
-  }
-
-  /**
-   * Render line segments to canvas with bezier curves at bends
-   * Each segment can have its own offset for parallel line rendering
-   */
-  private renderSegmentsToCanvas(
-    segments: LineSegment[],
-    segmentOffsets: { offsetX: number; offsetY: number }[],
-    color: number,
-    isTemp: boolean,
-  ): void {
-    if (segments.length === 0) return;
-
-    const lineWidth = LINE_WIDTH;
-    const cornerRadius = lineWidth * 2;
-    const tightness = 0.5;
-
-    // Start at first waypoint with offset
-    const firstOffset = segmentOffsets[0] || { offsetX: 0, offsetY: 0 };
-    this.linesLayer.moveTo(
-      (segments[0].waypoints[0].x + firstOffset.offsetX) * TILE_SIZE,
-      (segments[0].waypoints[0].y + firstOffset.offsetY) * TILE_SIZE,
+    this.metroRenderer.renderLines(
+      this.gameState.lines,
+      this.gameState.stations,
+      tempLine,
     );
-
-    for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex++) {
-      const segment = segments[segmentIndex];
-      const offset = segmentOffsets[segmentIndex] || { offsetX: 0, offsetY: 0 };
-      const waypoints = segment.waypoints;
-
-      for (let j = 0; j < waypoints.length - 1; j++) {
-        const next = waypoints[j + 1];
-
-        // Convert to pixel coordinates with offset
-        const nextX = (next.x + offset.offsetX) * TILE_SIZE;
-        const nextY = (next.y + offset.offsetY) * TILE_SIZE;
-
-        if (next.type === "BEND") {
-          // Approaching a bend - draw line to curve start, then the curve
-          const bendWaypoint = next;
-          const incomingAngle = bendWaypoint.incomingAngle ?? Direction.EAST;
-          const outgoingAngle = bendWaypoint.outgoingAngle ?? Direction.EAST;
-
-          const curve = this.createBendCurve(
-            bendWaypoint,
-            incomingAngle,
-            outgoingAngle,
-            cornerRadius,
-            tightness,
-          );
-
-          // Line to curve start (with offset)
-          this.linesLayer.lineTo(
-            (curve.start.x + offset.offsetX) * TILE_SIZE,
-            (curve.start.y + offset.offsetY) * TILE_SIZE,
-          );
-
-          // Cubic bezier curve (with offset)
-          this.linesLayer.bezierCurveTo(
-            (curve.control1.x + offset.offsetX) * TILE_SIZE,
-            (curve.control1.y + offset.offsetY) * TILE_SIZE,
-            (curve.control2.x + offset.offsetX) * TILE_SIZE,
-            (curve.control2.y + offset.offsetY) * TILE_SIZE,
-            (curve.end.x + offset.offsetX) * TILE_SIZE,
-            (curve.end.y + offset.offsetY) * TILE_SIZE,
-          );
-        } else {
-          // Straight line segment (either leaving a bend or between stations)
-          this.linesLayer.lineTo(nextX, nextY);
-        }
-      }
-    }
-
-    this.linesLayer.stroke({
-      width: lineWidth,
-      color: color,
-      alpha: isTemp ? 0.6 : 1.0,
-    });
-  }
-
-  /**
-   * Create bezier curve for a bend
-   */
-  private createBendCurve(
-    waypoint: Waypoint,
-    incomingAngle: Direction,
-    outgoingAngle: Direction,
-    cornerRadius: number,
-    tightness: number,
-  ): {
-    start: { x: number; y: number };
-    control1: { x: number; y: number };
-    control2: { x: number; y: number };
-    end: { x: number; y: number };
-  } {
-    const radius = cornerRadius / TILE_SIZE; // Convert to grid units
-
-    // Calculate where curve starts (along incoming direction)
-    const inDir = DIRECTION_VECTORS[incomingAngle];
-    const curveStart = {
-      x: waypoint.x - radius * inDir.dx,
-      y: waypoint.y - radius * inDir.dy,
-    };
-
-    // Calculate where curve ends (along outgoing direction)
-    const outDir = DIRECTION_VECTORS[outgoingAngle];
-    const curveEnd = {
-      x: waypoint.x + radius * outDir.dx,
-      y: waypoint.y + radius * outDir.dy,
-    };
-
-    // Calculate control points for smooth curve
-    const controlDistance = radius * tightness;
-
-    const control1 = {
-      x: curveStart.x + controlDistance * inDir.dx,
-      y: curveStart.y + controlDistance * inDir.dy,
-    };
-
-    const control2 = {
-      x: curveEnd.x - controlDistance * outDir.dx,
-      y: curveEnd.y - controlDistance * outDir.dy,
-    };
-
-    return { start: curveStart, control1, control2, end: curveEnd };
   }
 
   /**
@@ -1134,16 +792,19 @@ export class MetroBuildingScreen extends Container {
     });
 
     // Visualization mode buttons on right
+    const buttonGap = 20;
+
     this.showDefaultButton.x = centerX + 100;
     this.showDefaultButton.y = bottomY;
 
-    this.showResidentialButton.x = centerX + 210;
+    this.showResidentialButton.x = centerX + 100 + 100 + buttonGap;
     this.showResidentialButton.y = bottomY;
 
-    this.showOfficeButton.x = centerX + 330;
+    this.showOfficeButton.x = centerX + 100 + 100 + buttonGap + 120 + buttonGap;
     this.showOfficeButton.y = bottomY;
 
-    this.showBothButton.x = centerX + 440;
+    this.showBothButton.x =
+      centerX + 100 + 100 + buttonGap + 120 + buttonGap + 100 + buttonGap;
     this.showBothButton.y = bottomY;
 
     // Start Simulation button (center bottom, below other controls)
