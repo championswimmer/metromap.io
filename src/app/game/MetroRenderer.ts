@@ -43,8 +43,11 @@ export class MetroRenderer extends Container {
   public trainsLayer: Graphics;
   public stationsLayer: Graphics;
   public labelsLayer: Container;
+  public stationHitAreasLayer: Container;
 
   private stationLabelCache = new Map<string, Text>();
+  private stationHitAreaCache = new Map<string, Graphics>();
+  public onStationClick?: (station: Station) => void;
 
   constructor() {
     super();
@@ -61,6 +64,10 @@ export class MetroRenderer extends Container {
 
     this.labelsLayer = new Container();
     this.addChild(this.labelsLayer);
+
+    // Interactive layer on top for station clicks
+    this.stationHitAreasLayer = new Container();
+    this.addChild(this.stationHitAreasLayer);
   }
 
   /**
@@ -86,6 +93,48 @@ export class MetroRenderer extends Container {
     }
 
     this.renderStationLabels(stations);
+    this.renderStationHitAreas(stations);
+  }
+
+  /**
+   * Create interactive hit areas for stations
+   */
+  public renderStationHitAreas(stations: Station[]): void {
+    // Clear old hit areas that are no longer needed
+    const currentStationIds = new Set(stations.map((s) => s.id));
+    for (const [id, hitArea] of this.stationHitAreaCache.entries()) {
+      if (!currentStationIds.has(id)) {
+        hitArea.destroy();
+        this.stationHitAreaCache.delete(id);
+      }
+    }
+
+    // Create or update hit areas
+    for (const station of stations) {
+      let hitArea = this.stationHitAreaCache.get(station.id);
+
+      if (!hitArea) {
+        hitArea = new Graphics();
+        hitArea.eventMode = "static";
+        hitArea.cursor = "pointer";
+        hitArea.on("pointertap", () => {
+          if (this.onStationClick) {
+            this.onStationClick(station);
+          }
+        });
+        this.stationHitAreasLayer.addChild(hitArea);
+        this.stationHitAreaCache.set(station.id, hitArea);
+      }
+
+      // Draw larger clickable area
+      const px = station.vertexX * TILE_SIZE;
+      const py = station.vertexY * TILE_SIZE;
+      const hitRadius = STATION_RADIUS * 2; // Larger hit area for easier clicking
+
+      hitArea.clear();
+      hitArea.circle(px, py, hitRadius);
+      hitArea.fill({ color: 0x000000, alpha: 0 }); // Invisible
+    }
   }
 
   /**

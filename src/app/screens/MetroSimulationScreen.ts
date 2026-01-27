@@ -10,6 +10,7 @@ import { MapRenderer } from "../game/MapRenderer";
 import { MetroRenderer, TILE_SIZE } from "../game/MetroRenderer";
 import type { GameState } from "../game/models/GameState";
 import { saveGameState } from "../game/models/GameState";
+import type { Station } from "../game/models/Station";
 import { FlatButton } from "../ui/FlatButton";
 import { Label } from "../ui/Label";
 import type { MetroLine } from "../game/models/MetroLine";
@@ -536,6 +537,11 @@ export class MetroSimulationScreen extends Container {
     this.drawMapBackground();
     this.updateMetroRenderer(false); // Draw everything
 
+    // Set up station click handler
+    this.metroRenderer.onStationClick = (station) => {
+      this.showStationDetails(station);
+    };
+
     // Update clock display
     const currentDate = new Date(this.gameState.simulationTime);
     this.clockLabel.text = this.formatDateTime(currentDate);
@@ -551,6 +557,18 @@ export class MetroSimulationScreen extends Container {
     this.mapBackground.clear();
     this.mapBackground.rect(0, 0, mapWidth, mapHeight);
     this.mapBackground.stroke({ width: 2, color: 0x444444 });
+  }
+
+  /**
+   * Show station details popup
+   */
+  private async showStationDetails(station: Station): Promise<void> {
+    const { StationDetailPopup, setStationForPopup } =
+      await import("../popups/StationDetailPopup");
+    const { engine } = await import("../getEngine");
+
+    setStationForPopup(station);
+    engine().navigation.presentPopup(StationDetailPopup);
   }
 
   /**
