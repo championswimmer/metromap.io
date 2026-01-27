@@ -493,7 +493,11 @@ export class MetroSimulationScreen extends Container {
         this.gameState.lines,
         this.gameState.stations,
       );
+    } else {
+      // Always update passenger counts during simulation
+      this.metroRenderer.renderStationLabels(this.gameState.stations);
     }
+
     this.metroRenderer.renderTrains(
       this.gameState.lines,
       this.gameState.stations,

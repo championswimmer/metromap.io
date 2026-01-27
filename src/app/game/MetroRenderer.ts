@@ -4,7 +4,7 @@
  * Handles Harry Beck style line rendering and train visualization.
  */
 
-import { Container, Graphics } from "pixi.js";
+import { Container, Graphics, Text, TextStyle } from "pixi.js";
 import type { MetroLine } from "./models/MetroLine";
 import { LINE_COLOR_HEX } from "./models/MetroLine";
 import type { Station } from "./models/Station";
@@ -42,6 +42,9 @@ export class MetroRenderer extends Container {
   public linesLayer: Graphics;
   public trainsLayer: Graphics;
   public stationsLayer: Graphics;
+  public labelsLayer: Container;
+
+  private stationLabelCache = new Map<string, Text>();
 
   constructor() {
     super();
@@ -55,6 +58,9 @@ export class MetroRenderer extends Container {
 
     this.stationsLayer = new Graphics();
     this.addChild(this.stationsLayer);
+
+    this.labelsLayer = new Container();
+    this.addChild(this.labelsLayer);
   }
 
   /**
@@ -77,6 +83,45 @@ export class MetroRenderer extends Container {
         width: STATION_BORDER_WIDTH,
         color: STATION_BORDER_COLOR,
       });
+    }
+
+    this.renderStationLabels(stations);
+  }
+
+  /**
+   * Update station passenger count labels
+   */
+  public renderStationLabels(stations: Station[]): void {
+    for (const station of stations) {
+      const count = station.passengers ? station.passengers.length : 0;
+      let label = this.stationLabelCache.get(station.id);
+
+      if (count > 0) {
+        if (!label) {
+          label = new Text({
+            text: count.toString(),
+            style: new TextStyle({
+              fontFamily: "Arial",
+              fontSize: 10,
+              fill: 0xffffff,
+              stroke: { color: 0x000000, width: 2 },
+              fontWeight: "bold",
+            }),
+          });
+          label.anchor.set(0.5, 1); // Bottom center anchor
+          this.labelsLayer.addChild(label);
+          this.stationLabelCache.set(station.id, label);
+        }
+
+        label.text = count.toString();
+        label.x = station.vertexX * TILE_SIZE;
+        label.y = station.vertexY * TILE_SIZE - STATION_RADIUS - 2;
+        label.visible = true;
+      } else {
+        if (label) {
+          label.visible = false;
+        }
+      }
     }
   }
 

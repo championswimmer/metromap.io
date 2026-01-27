@@ -8,7 +8,7 @@ import type { Station } from "../models/Station";
 import { createPassenger } from "../models/Passenger";
 
 // Constants
-const BASE_SPAWN_RATE = 0.5; // Passengers per game-minute (global scalar)
+const BASE_SPAWN_RATE = 1; // Passengers per game-hour (global scalar)
 
 interface CatchmentStats {
   residential: number; // Total residential density score
@@ -213,9 +213,9 @@ export function updatePassengerSpawning(
     // deltaSeconds is e.g. 0.016 (16ms) or more.
     // Let's use a probabilistic check.
 
-    const densityFactor = sourcePotential / 500; // Tunable constant
+    const densityFactor = sourcePotential / (100 * 100 * 25); // Tunable constant
     const spawnChance =
-      BASE_SPAWN_RATE * spawnMultiplier * densityFactor * deltaSeconds;
+      (BASE_SPAWN_RATE * spawnMultiplier * densityFactor * deltaSeconds) / 3600;
 
     if (Math.random() < spawnChance) {
       spawnPassengerAt(station, gameState, stationDestWeights, totalDestWeight);
