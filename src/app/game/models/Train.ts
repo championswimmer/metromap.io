@@ -1,4 +1,8 @@
 import type { LineSegment } from "../pathfinding/LinePath";
+import type { Passenger } from "./Passenger";
+
+// Train capacity constant
+export const TRAIN_MAX_CAPACITY = 30;
 
 export interface Train {
   id: string;
@@ -16,6 +20,10 @@ export interface Train {
   // Cached path data for current segment (Station A -> Station B)
   currentSegment: LineSegment | null;
   totalLength: number; // Length of current segment in grid units
+
+  // Passengers
+  passengers: Passenger[];
+  capacity: number;
 }
 
 export function createTrain(
@@ -33,5 +41,7 @@ export function createTrain(
     speed,
     currentSegment: null,
     totalLength: 0,
+    passengers: [],
+    capacity: TRAIN_MAX_CAPACITY,
   };
 }

@@ -6,9 +6,10 @@ import type { GameState } from "../models/GameState";
 import type { MapGrid } from "../models/MapGrid";
 import type { Station } from "../models/Station";
 import { createPassenger } from "../models/Passenger";
+import { findRoute } from "../pathfinding/StationGraph";
 
 // Constants
-const BASE_SPAWN_RATE = 1; // Passengers per game-hour (global scalar)
+const BASE_SPAWN_RATE = 0.5; // Passengers per game-hour (global scalar)
 
 interface CatchmentStats {
   residential: number; // Total residential density score
@@ -261,12 +262,26 @@ function spawnPassengerAt(
 
   if (!targetStationId) return;
 
+  // Calculate Path
+  const path = findRoute(
+    sourceStation.id,
+    targetStationId,
+    gameState.stations,
+    gameState.lines,
+  );
+
+  if (!path || path.length === 0) return;
+
   // Create Passenger
   const passenger = createPassenger(
     sourceStation.id,
     targetStationId,
     gameState.simulationTime,
   );
+  passenger.path = path;
+  // nextWaypointIndex starts at 0, which is the source station (path[0]).
+  // We want the *next* station to target, which is path[1].
+  passenger.nextWaypointIndex = 1;
 
   // Add to state
   gameState.passengers.push(passenger);

@@ -8,9 +8,13 @@ export interface Passenger {
   destinationStationId: string; // ID of the target station
   spawnTime: number; // Timestamp when the passenger appeared
 
-  // Future state tracking
-  // currentStationId?: string; // If waiting at a station
-  // currentTrainId?: string; // If on a train
+  // Pathfinding
+  path: string[]; // List of station IDs to traverse (including transfers/destination)
+  nextWaypointIndex: number; // Index in path we are trying to reach next
+
+  // State tracking
+  currentStationId?: string; // If waiting at a station
+  currentTrainId?: string; // If on a train
 }
 
 /**
@@ -26,5 +30,8 @@ export function createPassenger(
     sourceStationId: sourceId,
     destinationStationId: destinationId,
     spawnTime,
+    path: [],
+    nextWaypointIndex: 0,
+    currentStationId: sourceId,
   };
 }

@@ -15,6 +15,7 @@ import { Label } from "../ui/Label";
 import type { MetroLine } from "../game/models/MetroLine";
 import { Train, createTrain } from "../game/models/Train";
 import { updatePassengerSpawning } from "../game/simulation/PassengerSpawner";
+import { updatePassengerMovement } from "../game/simulation/PassengerMovement";
 import {
   calculateSegmentPath,
   calculateSnapAngle,
@@ -320,6 +321,10 @@ export class MetroSimulationScreen extends Container {
       } else {
         // Ensure existing trains have paths (e.g. after reload)
         for (const train of line.trains) {
+          // Ensure passengers array exists (for backward compatibility)
+          if (!train.passengers) {
+            train.passengers = [];
+          }
           if (!train.currentSegment) {
             this.updateTrainPath(train, line);
           }
@@ -352,6 +357,15 @@ export class MetroSimulationScreen extends Container {
           // Arrived at station
           train.currentStationIdx = train.targetStationIdx;
           train.progress = 0; // Reset progress (lose overflow for simplicity or can carry over)
+
+          // Handle passenger boarding and alighting
+          const currentStationId = line.stationIds[train.currentStationIdx];
+          const currentStation = this.gameState.stations.find(
+            (s) => s.id === currentStationId,
+          );
+          if (currentStation) {
+            updatePassengerMovement(train, currentStation, this.gameState);
+          }
 
           // Determine next target
           if (line.isLoop) {
