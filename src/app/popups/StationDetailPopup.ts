@@ -17,9 +17,14 @@ interface DestinationData {
 
 // Store the current station to display (set before showing popup)
 let currentStation: Station | null = null;
+let allStations: Station[] = [];
 
-export function setStationForPopup(station: Station): void {
+export function setStationForPopup(
+  station: Station,
+  stations: Station[],
+): void {
   currentStation = station;
+  allStations = stations;
 }
 
 export class StationDetailPopup extends Container {
@@ -63,7 +68,7 @@ export class StationDetailPopup extends Container {
 
     // Title
     this.title = new Label({
-      text: `Station ${this.station.id}`,
+      text: `Station ${this.station.label}`,
       style: {
         fill: 0xffffff,
         fontSize: 32,
@@ -166,6 +171,12 @@ export class StationDetailPopup extends Container {
     for (let i = 0; i < visibleDestinations.length; i++) {
       const dest = visibleDestinations[i];
 
+      // Find the station to get its label
+      const destStation = allStations.find((s) => s.id === dest.stationId);
+      const destLabel = destStation
+        ? `Station ${dest.stationId} (${destStation.label})`
+        : `Station ${dest.stationId}`;
+
       // Alternating row background
       const rowBg = new Graphics();
       rowBg.rect(-220, rowY, 440, 30);
@@ -173,16 +184,16 @@ export class StationDetailPopup extends Container {
       this.tableContainer.addChild(rowBg);
 
       // Destination label
-      const destLabel = new Label({
-        text: `Station ${dest.stationId}`,
+      const destLabelText = new Label({
+        text: destLabel,
         style: {
           fill: 0xecf0f1,
           fontSize: 14,
         },
       });
-      destLabel.anchor.set(0, 0.5);
-      destLabel.position.set(-210, rowY + 15);
-      this.tableContainer.addChild(destLabel);
+      destLabelText.anchor.set(0, 0.5);
+      destLabelText.position.set(-210, rowY + 15);
+      this.tableContainer.addChild(destLabelText);
 
       // Count label
       const countLabel = new Label({

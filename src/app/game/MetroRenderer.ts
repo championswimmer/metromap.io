@@ -45,7 +45,8 @@ export class MetroRenderer extends Container {
   public labelsLayer: Container;
   public stationHitAreasLayer: Container;
 
-  private stationLabelCache = new Map<string, Text>();
+  private stationPassengerCountCache = new Map<string, Text>();
+  private stationNameLabelCache = new Map<string, Text>();
   private stationHitAreaCache = new Map<string, Graphics>();
   public onStationClick?: (station: Station) => void;
 
@@ -93,7 +94,38 @@ export class MetroRenderer extends Container {
     }
 
     this.renderStationLabels(stations);
+    this.renderStationNameLabels(stations);
     this.renderStationHitAreas(stations);
+  }
+
+  /**
+   * Render station name labels (A, B, C, etc.)
+   */
+  public renderStationNameLabels(stations: Station[]): void {
+    for (const station of stations) {
+      let label = this.stationNameLabelCache.get(station.id);
+
+      if (!label) {
+        label = new Text({
+          text: station.label,
+          style: new TextStyle({
+            fontFamily: "Arial",
+            fontSize: 12,
+            fill: 0xffffff,
+            stroke: { color: 0x000000, width: 3 },
+            fontWeight: "bold",
+          }),
+        });
+        label.anchor.set(0.5); // Center anchor
+        this.labelsLayer.addChild(label);
+        this.stationNameLabelCache.set(station.id, label);
+      }
+
+      label.text = station.label;
+      label.x = station.vertexX * TILE_SIZE;
+      label.y = station.vertexY * TILE_SIZE;
+      label.visible = true;
+    }
   }
 
   /**
@@ -143,7 +175,7 @@ export class MetroRenderer extends Container {
   public renderStationLabels(stations: Station[]): void {
     for (const station of stations) {
       const count = station.passengers ? station.passengers.length : 0;
-      let label = this.stationLabelCache.get(station.id);
+      let label = this.stationPassengerCountCache.get(station.id);
 
       if (count > 0) {
         if (!label) {
@@ -159,7 +191,7 @@ export class MetroRenderer extends Container {
           });
           label.anchor.set(0.5, 1); // Bottom center anchor
           this.labelsLayer.addChild(label);
-          this.stationLabelCache.set(station.id, label);
+          this.stationPassengerCountCache.set(station.id, label);
         }
 
         label.text = count.toString();

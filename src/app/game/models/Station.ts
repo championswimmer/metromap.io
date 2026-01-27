@@ -9,6 +9,23 @@ export interface Station {
   vertexX: number; // Vertex grid coordinate (0-48 for width 48)
   vertexY: number; // Vertex grid coordinate (0-32 for height 32)
   passengers: Passenger[]; // Queue of passengers waiting at this station
+  label: string; // Human-readable label: A, B, C... Z, AA, AB, etc.
+}
+
+/**
+ * Generate a station label from an index
+ * A, B, C... Z, AA, AB, AC... AZ, BA, BB...
+ */
+export function generateStationLabel(index: number): string {
+  let label = "";
+  let num = index;
+
+  do {
+    label = String.fromCharCode(65 + (num % 26)) + label;
+    num = Math.floor(num / 26) - 1;
+  } while (num >= 0);
+
+  return label;
 }
 
 /**

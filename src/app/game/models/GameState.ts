@@ -5,6 +5,7 @@
 
 import type { MapGrid } from "./MapGrid";
 import type { Station } from "./Station";
+import { generateStationLabel } from "./Station";
 import type { MetroLine, LineColor } from "./MetroLine";
 import type { Passenger } from "./Passenger";
 import { storage } from "../../../engine/utils/storage";
@@ -64,6 +65,10 @@ export function addLine(state: GameState, line: MetroLine): boolean {
  * Add a station to the game state
  */
 export function addStation(state: GameState, station: Station): void {
+  // Assign label based on current station count if not already set
+  if (!station.label) {
+    station.label = generateStationLabel(state.stations.length);
+  }
   state.stations.push(station);
   saveGameState(state);
 }
@@ -105,11 +110,14 @@ export function loadGameState(): GameState | null {
         gameState.passengers = [];
       }
 
-      // Ensure each station has a passengers array (for backward compatibility)
+      // Ensure each station has a passengers array and label (for backward compatibility)
       if (gameState.stations) {
-        gameState.stations.forEach((station) => {
+        gameState.stations.forEach((station, index) => {
           if (!station.passengers) {
             station.passengers = [];
+          }
+          if (!station.label) {
+            station.label = generateStationLabel(index);
           }
         });
       }

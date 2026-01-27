@@ -567,7 +567,7 @@ export class MetroSimulationScreen extends Container {
       await import("../popups/StationDetailPopup");
     const { engine } = await import("../getEngine");
 
-    setStationForPopup(station);
+    setStationForPopup(station, this.gameState.stations);
     engine().navigation.presentPopup(StationDetailPopup);
   }
 

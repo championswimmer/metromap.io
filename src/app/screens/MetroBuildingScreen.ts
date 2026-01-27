@@ -644,11 +644,12 @@ export class MetroBuildingScreen extends Container {
       vertexX,
       vertexY,
       passengers: [],
+      label: "", // Will be assigned by addStation()
     };
 
     addStation(this.gameState, station);
     console.log(
-      `Added station ${station.id} at vertex (${vertexX}, ${vertexY})`,
+      `Added station ${station.id} (${station.label}) at vertex (${vertexX}, ${vertexY})`,
     );
 
     // Redraw stations
