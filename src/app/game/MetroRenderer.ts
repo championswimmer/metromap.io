@@ -19,9 +19,10 @@ import {
   type LineSegment,
   type Waypoint,
 } from "./pathfinding/LinePath";
+import { TILE_SIZE } from "./config";
 
 // Visual constants
-export const TILE_SIZE = 16;
+export { TILE_SIZE };
 export const STATION_RADIUS = TILE_SIZE * 0.5;
 export const STATION_COLOR = 0xffffff;
 export const STATION_BORDER_COLOR = 0x000000;

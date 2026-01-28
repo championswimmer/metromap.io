@@ -1,8 +1,9 @@
 import type { LineSegment } from "../pathfinding/LinePath";
 import type { Passenger } from "./Passenger";
+import { TRAIN_MAX_CAPACITY, TRAIN_DEFAULT_SPEED } from "../config";
 
 // Train capacity constant
-export const TRAIN_MAX_CAPACITY = 30;
+export { TRAIN_MAX_CAPACITY };
 
 export interface Train {
   id: string;
@@ -29,7 +30,7 @@ export interface Train {
 export function createTrain(
   lineId: string,
   startStationIdx: number = 0,
-  speed: number = 1,
+  speed: number = TRAIN_DEFAULT_SPEED,
 ): Train {
   return {
     id: `train-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,

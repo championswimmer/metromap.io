@@ -7,9 +7,7 @@ import type { MapGrid } from "../models/MapGrid";
 import type { Station } from "../models/Station";
 import { createPassenger } from "../models/Passenger";
 import { findRoute } from "../pathfinding/StationGraph";
-
-// Constants
-const BASE_SPAWN_RATE = 0.5; // Passengers per game-hour (global scalar)
+import { BASE_SPAWN_RATE } from "../config";
 
 interface CatchmentStats {
   residential: number; // Total residential density score

@@ -9,13 +9,8 @@ import {
   randomInt,
   randomFloat,
 } from "../../engine/utils/random";
-import {
-  type GridSquare,
-  type MapGrid,
-  type MapType,
-  MAP_WIDTH,
-  MAP_HEIGHT,
-} from "./models/MapGrid";
+import { type GridSquare, type MapGrid, type MapType } from "./models/MapGrid";
+import { MAP_WIDTH, MAP_HEIGHT } from "./config";
 
 type Edge = "TOP" | "BOTTOM" | "LEFT" | "RIGHT";
 type RiverType = "SINGLE" | "BRANCHING" | "TWO_SEPARATE";

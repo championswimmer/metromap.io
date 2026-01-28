@@ -8,7 +8,7 @@ import type { Train } from "../models/Train";
 import type { Station } from "../models/Station";
 import type { Passenger } from "../models/Passenger";
 import type { MetroLine } from "../models/MetroLine";
-import { TRAIN_MAX_CAPACITY } from "../models/Train";
+import { TRAIN_MAX_CAPACITY } from "../config";
 
 /**
  * Check if a train is traveling towards a specific station

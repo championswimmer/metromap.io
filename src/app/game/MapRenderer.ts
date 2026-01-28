@@ -5,10 +5,10 @@
  */
 
 import { Container, Graphics } from "pixi.js";
-import { type MapGrid, MAP_WIDTH, MAP_HEIGHT } from "./models/MapGrid";
+import { type MapGrid } from "./models/MapGrid";
+import { MAP_WIDTH, MAP_HEIGHT, TILE_SIZE } from "./config";
 
 // Visual constants
-const TILE_SIZE = 16;
 const WATER_COLOR = 0x4a90e2;
 const LAND_COLOR = 0xe8e8e8;
 const GRID_LINE_COLOR = 0xd0d0d0;

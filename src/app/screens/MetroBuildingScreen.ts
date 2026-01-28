@@ -7,7 +7,8 @@ import { animate } from "motion";
 import { Container, Graphics, FederatedPointerEvent } from "pixi.js";
 
 import { MapRenderer } from "../game/MapRenderer";
-import { MetroRenderer, TILE_SIZE } from "../game/MetroRenderer";
+import { MetroRenderer } from "../game/MetroRenderer";
+import { TILE_SIZE } from "../game/config";
 import type { MapGrid } from "../game/models/MapGrid";
 import type { Station } from "../game/models/Station";
 import { generateStationId } from "../game/models/Station";

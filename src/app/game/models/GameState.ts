@@ -9,6 +9,7 @@ import { generateStationLabel } from "./Station";
 import type { MetroLine, LineColor } from "./MetroLine";
 import type { Passenger } from "./Passenger";
 import { storage } from "../../../engine/utils/storage";
+import { GAME_START_TIME_ISO } from "../config";
 
 const SAVE_GAME_KEY = "metromap-saved-game";
 
@@ -27,7 +28,7 @@ export interface GameState {
  */
 export function createGameState(seed: number, map: MapGrid): GameState {
   // Start at 1 Jan 2025 08:00
-  const startDate = new Date("2025-01-01T08:00:00");
+  const startDate = new Date(GAME_START_TIME_ISO);
   return {
     seed,
     map,

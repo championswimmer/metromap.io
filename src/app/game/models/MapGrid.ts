@@ -13,6 +13,8 @@ export interface GridSquare {
   officeDensity: number; // 0-100, for future use
 }
 
+import { MAP_WIDTH, MAP_HEIGHT } from "../config";
+
 export interface MapGrid {
   width: number;
   height: number;
@@ -21,5 +23,4 @@ export interface MapGrid {
   squares: GridSquare[][];
 }
 
-export const MAP_WIDTH = 48;
-export const MAP_HEIGHT = 32;
+export { MAP_WIDTH, MAP_HEIGHT };

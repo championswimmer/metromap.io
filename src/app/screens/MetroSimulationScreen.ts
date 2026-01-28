@@ -7,7 +7,12 @@ import { Container, Graphics, Ticker } from "pixi.js";
 import { animate } from "motion";
 
 import { MapRenderer } from "../game/MapRenderer";
-import { MetroRenderer, TILE_SIZE } from "../game/MetroRenderer";
+import { MetroRenderer } from "../game/MetroRenderer";
+import {
+  TILE_SIZE,
+  BASE_GAME_SPEED,
+  GAME_START_TIME_ISO,
+} from "../game/config";
 import type { GameState } from "../game/models/GameState";
 import { saveGameState } from "../game/models/GameState";
 import type { Station } from "../game/models/Station";
@@ -25,8 +30,7 @@ import {
 } from "../game/pathfinding/LinePath";
 
 // Time progression speeds (milliseconds per real second)
-// 1 week (user time 1 min) = 7 * 24 * 60 * 60 * 1000 / 60 = 10,080,000 ms/sec
-const SPEED_1X = (7 * 24 * 60 * 60 * 1000) / 60;
+const SPEED_1X = BASE_GAME_SPEED;
 const SPEED_2X = SPEED_1X * 2;
 const SPEED_4X = SPEED_1X * 4;
 
@@ -69,7 +73,7 @@ export class MetroSimulationScreen extends Container {
 
     // Clock display
     this.clockLabel = new Label({
-      text: this.formatDateTime(new Date("2025-01-01T08:00:00")),
+      text: this.formatDateTime(new Date(GAME_START_TIME_ISO)),
       style: {
         fontSize: 24,
         fill: 0x88ccff,
