@@ -751,76 +751,92 @@ export class MetroBuildingScreen extends Container {
   public resize(width: number, height: number) {
     const centerX = width * 0.5;
 
-    // Title at top
-    this.titleLabel.x = centerX;
-    this.titleLabel.y = 30;
+    // Top Bar (Y=30)
+    const topBarY = 30;
 
-    // Clock at top right (left of reset button)
-    this.clockLabel.x = width - 280;
-    this.clockLabel.y = 35;
-
-    // Reset button at top right
-    this.resetButton.x = width - 120;
-    this.resetButton.y = 30;
+    // Title at top left
+    this.titleLabel.anchor.set(0, 0.5);
+    this.titleLabel.x = 20;
+    this.titleLabel.y = topBarY;
 
     // Instructions below title
-    this.instructionLabel.x = centerX;
-    this.instructionLabel.y = 70;
+    this.instructionLabel.anchor.set(0, 0.5);
+    this.instructionLabel.x = 20;
+    this.instructionLabel.y = topBarY + 30;
 
-    // Control buttons at bottom
-    const bottomY = height - 100;
+    // Reset button at top right
+    this.resetButton.x = width - 20 - (this.resetButton.width / 2);
+    this.resetButton.y = topBarY;
 
-    // Station control buttons
-    this.addStationButton.x = centerX - 380;
-    this.addStationButton.y = bottomY;
+    // Clock to left of Reset Control
+    this.clockLabel.anchor.set(1, 0.5);
+    this.clockLabel.x = width - 130;
+    this.clockLabel.y = topBarY;
 
-    this.removeStationButton.x = centerX - 250;
-    this.removeStationButton.y = bottomY;
+    // --- Controls Row 1 (Y=100) ---
+    const row1Y = 100;
+    const gap = 15;
 
-    // Line control buttons
-    this.addLineButton.x = centerX - 120;
-    this.addLineButton.y = bottomY;
+    // Left: Station and Line controls
+    let leftX = 20 + (this.addStationButton.width / 2);
 
-    this.completeLineButton.x = centerX - 10;
-    this.completeLineButton.y = bottomY;
+    this.addStationButton.x = leftX;
+    this.addStationButton.y = row1Y;
+    leftX += this.addStationButton.width / 2 + gap + this.removeStationButton.width / 2;
 
-    // Color picker buttons (arranged in a row above main buttons)
-    const colorY = bottomY - 50;
-    let colorX = centerX - 480;
+    this.removeStationButton.x = leftX;
+    this.removeStationButton.y = row1Y;
+    leftX += this.removeStationButton.width / 2 + gap * 2 + this.addLineButton.width / 2;
+
+    this.addLineButton.x = leftX;
+    this.addLineButton.y = row1Y;
+    leftX += this.addLineButton.width / 2 + gap + this.completeLineButton.width / 2;
+
+    this.completeLineButton.x = leftX;
+    this.completeLineButton.y = row1Y;
+
+    // Right: Visualization controls
+    let rightX = width - 20 - (this.showBothButton.width / 2);
+
+    this.showBothButton.x = rightX;
+    this.showBothButton.y = row1Y;
+    rightX -= (this.showBothButton.width / 2 + gap + this.showOfficeButton.width / 2);
+
+    this.showOfficeButton.x = rightX;
+    this.showOfficeButton.y = row1Y;
+    rightX -= (this.showOfficeButton.width / 2 + gap + this.showResidentialButton.width / 2);
+
+    this.showResidentialButton.x = rightX;
+    this.showResidentialButton.y = row1Y;
+    rightX -= (this.showResidentialButton.width / 2 + gap + this.showDefaultButton.width / 2);
+
+    this.showDefaultButton.x = rightX;
+    this.showDefaultButton.y = row1Y;
+
+    // --- Controls Row 2 (Y=150) ---
+    const row2Y = 150;
+
+    // Left: Color picker buttons
+    let colorX = 20 + 40; // 40 is half-width
     this.colorButtons.forEach((button) => {
       button.x = colorX;
-      button.y = colorY;
-      colorX += 85;
+      button.y = row2Y;
+      colorX += 80 + 5;
     });
 
-    // Visualization mode buttons on right
-    const buttonGap = 20;
+    // Right: Start Simulation button
+    this.startSimulationButton.x = width - 20 - (this.startSimulationButton.width / 2);
+    this.startSimulationButton.y = row2Y;
 
-    this.showDefaultButton.x = centerX + 100;
-    this.showDefaultButton.y = bottomY;
+    // Map display
+    const mapStartY = 190;
+    const mapBottomMargin = 10;
 
-    this.showResidentialButton.x = centerX + 100 + 100 + buttonGap;
-    this.showResidentialButton.y = bottomY;
+    const availableHeight = height - mapStartY - mapBottomMargin;
+    const availableWidth = width - 20;
 
-    this.showOfficeButton.x = centerX + 100 + 100 + buttonGap + 120 + buttonGap;
-    this.showOfficeButton.y = bottomY;
-
-    this.showBothButton.x =
-      centerX + 100 + 100 + buttonGap + 120 + buttonGap + 100 + buttonGap;
-    this.showBothButton.y = bottomY;
-
-    // Start Simulation button (center bottom, below other controls)
-    this.startSimulationButton.x = centerX - 80;
-    this.startSimulationButton.y = bottomY + 60;
-
-    // Map display - centered
     const mapWidth = this.mapRenderer.getMapWidth();
     const mapHeight = this.mapRenderer.getMapHeight();
-
-    // Scale map to fit if needed
-    const mapStartY = 110;
-    const availableHeight = height - mapStartY - 120;
-    const availableWidth = width - 40;
     const scaleX = availableWidth / mapWidth;
     const scaleY = availableHeight / mapHeight;
     const mapScale = Math.min(1, scaleX, scaleY);

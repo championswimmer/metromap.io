@@ -578,39 +578,55 @@ export class MetroSimulationScreen extends Container {
   public resize(width: number, height: number): void {
     const centerX = width * 0.5;
 
+    // Top Bar (Y=30)
+    const topBarY = 30;
+
     // Title at top left
-    this.titleLabel.x = 150;
-    this.titleLabel.y = 30;
+    this.titleLabel.anchor.set(0, 0.5);
+    this.titleLabel.x = 20;
+    this.titleLabel.y = topBarY;
 
     // Clock at top right
-    this.clockLabel.x = width - 250;
-    this.clockLabel.y = 35;
+    this.clockLabel.anchor.set(1, 0.5);
+    this.clockLabel.x = width - 20;
+    this.clockLabel.y = topBarY;
 
-    // Control buttons at bottom
-    const bottomY = height - 80;
+    // Controls Row (Y=80)
+    const controlsY = 80;
 
-    this.stopButton.x = centerX - 280;
-    this.stopButton.y = bottomY;
+    // Stop Simulation Button (Left)
+    this.stopButton.x = 20 + (this.stopButton.width / 2);
+    this.stopButton.y = controlsY;
 
-    this.speed1xButton.x = centerX + 100;
-    this.speed1xButton.y = bottomY;
+    // Speed buttons (Right)
+    const gap = 10;
+    let speedX = width - 20 - (this.speed12xButton.width / 2);
 
-    this.speed2xButton.x = centerX + 170;
-    this.speed2xButton.y = bottomY;
+    this.speed12xButton.x = speedX;
+    this.speed12xButton.y = controlsY;
+    speedX -= (this.speed12xButton.width / 2 + gap + this.speed4xButton.width / 2);
 
-    this.speed4xButton.x = centerX + 240;
-    this.speed4xButton.y = bottomY;
+    this.speed4xButton.x = speedX;
+    this.speed4xButton.y = controlsY;
+    speedX -= (this.speed4xButton.width / 2 + gap + this.speed2xButton.width / 2);
 
-    this.speed12xButton.x = centerX + 310;
-    this.speed12xButton.y = bottomY;
+    this.speed2xButton.x = speedX;
+    this.speed2xButton.y = controlsY;
+    speedX -= (this.speed2xButton.width / 2 + gap + this.speed1xButton.width / 2);
 
-    // Map display - centered
+    this.speed1xButton.x = speedX;
+    this.speed1xButton.y = controlsY;
+
+    // Map display
+    const mapStartY = 120;
+    const mapBottomMargin = 10;
+
+    const availableHeight = height - mapStartY - mapBottomMargin;
+    const availableWidth = width - 20;
+    
     const mapWidth = this.mapRenderer.getMapWidth();
     const mapHeight = this.mapRenderer.getMapHeight();
 
-    const mapStartY = 90;
-    const availableHeight = height - mapStartY - 120;
-    const availableWidth = width - 40;
     const scaleX = availableWidth / mapWidth;
     const scaleY = availableHeight / mapHeight;
     const mapScale = Math.min(1, scaleX, scaleY);
