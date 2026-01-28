@@ -331,71 +331,117 @@ export class MapPickerScreen extends Container {
 
     // Title at top
     this.titleLabel.x = centerX;
-    this.titleLabel.y = 40;
+    this.titleLabel.y = 30;
 
-    // Seed controls area - all in one row at the top with proper spacing
-    const controlsY = 100;
+    // --- Row 1: Seed Controls (Y=80) ---
+    const row1Y = 80;
+    const gap = 10;
+    
+    // Defined widths for calculation (based on initialization)
+    const wLabel = 60;  // Approx for "Seed:"
+    const wDec = 50;    // Button width
+    const wVal = 80;    // Approx for "000"
+    const wInc = 50;    // Button width
+    const wRand = 120;  // Random button (widened slightly for balance)
+    const wGen = 120;   // Generate button
 
-    this.seedLabel.x = centerX - 200;
-    this.seedLabel.y = controlsY;
+    // Calculate total width to center the group
+    // Group: [Seed:] [Dec] [Val] [Inc]  --Gap-- [Random] [Generate]
+    const seedGroupWidth = wLabel + gap + wDec + gap + wVal + gap + wInc;
+    const actionGroupWidth = wRand + gap + wGen;
+    const groupGap = 30; // Gap between seed selector and action buttons
+    
+    const totalRow1Width = seedGroupWidth + groupGap + actionGroupWidth;
+    let currentX = centerX - (totalRow1Width / 2);
 
-    // Decrement button with spacing
-    this.decrementButton.x = centerX - 125;
-    this.decrementButton.y = controlsY;
+    // Seed Label
+    this.seedLabel.x = currentX + wLabel / 2;
+    this.seedLabel.y = row1Y;
+    currentX += wLabel + gap;
 
-    // Seed value in the middle
-    this.seedValueLabel.x = centerX - 60;
-    this.seedValueLabel.y = controlsY;
+    // Decrement
+    this.decrementButton.x = currentX + wDec / 2;
+    this.decrementButton.y = row1Y;
+    currentX += wDec + gap;
 
-    // Increment button with spacing
-    this.incrementButton.x = centerX + 5;
-    this.incrementButton.y = controlsY;
+    // Value
+    this.seedValueLabel.x = currentX + wVal / 2;
+    this.seedValueLabel.y = row1Y;
+    currentX += wVal + gap;
 
-    // Add padding after + button before Random
-    this.randomButton.x = centerX + 100;
-    this.randomButton.y = controlsY;
+    // Increment
+    this.incrementButton.x = currentX + wInc / 2;
+    this.incrementButton.y = row1Y;
+    currentX += wInc + groupGap;
 
-    // Space between Random and Generate
-    this.generateButton.x = centerX + 220;
-    this.generateButton.y = controlsY;
+    // Random
+    this.randomButton.width = wRand; // Update width to match layout
+    this.randomButton.x = currentX + wRand / 2;
+    this.randomButton.y = row1Y;
+    currentX += wRand + gap;
 
-    // Map type label below controls
+    // Generate
+    this.generateButton.x = currentX + wGen / 2;
+    this.generateButton.y = row1Y;
+
+
+    // --- Row 2: Type Info (Y=125) ---
+    const rowInfoY = 125;
     this.mapTypeLabel.x = centerX;
-    this.mapTypeLabel.y = controlsY + 50;
+    this.mapTypeLabel.y = rowInfoY;
 
-    // Visualization mode buttons below map type label
-    const vizButtonsY = controlsY + 85;
-    const buttonGap = 20;
 
-    // Total width: 100 + 120 + 100 + 100 + 3 * 20 = 480
-    // Start X = Center - 240
+    // --- Row 3: Visualization & Start (Y=165) ---
+    const row2Y = 170;
+    
+    // Widths
+    const wVizDef = 100;
+    const wVizRes = 120;
+    const wVizOff = 100;
+    const wVizBoth = 100;
+    const wStart = 160;
+    const startGap = 40; // Gap before START button
 
-    this.showDefaultButton.x = centerX - 240;
-    this.showDefaultButton.y = vizButtonsY;
+    const totalRow2Width = wVizDef + gap + wVizRes + gap + wVizOff + gap + wVizBoth + startGap + wStart;
+    currentX = centerX - (totalRow2Width / 2);
 
-    this.showResidentialButton.x = centerX - 240 + 100 + buttonGap;
-    this.showResidentialButton.y = vizButtonsY;
+    // Default
+    this.showDefaultButton.x = currentX + wVizDef / 2;
+    this.showDefaultButton.y = row2Y;
+    currentX += wVizDef + gap;
 
-    this.showOfficeButton.x = centerX - 240 + 100 + buttonGap + 120 + buttonGap;
-    this.showOfficeButton.y = vizButtonsY;
+    // Residential
+    this.showResidentialButton.x = currentX + wVizRes / 2;
+    this.showResidentialButton.y = row2Y;
+    currentX += wVizRes + gap;
 
-    this.showBothButton.x =
-      centerX - 240 + 100 + buttonGap + 120 + buttonGap + 100 + buttonGap;
-    this.showBothButton.y = vizButtonsY;
+    // Office
+    this.showOfficeButton.x = currentX + wVizOff / 2;
+    this.showOfficeButton.y = row2Y;
+    currentX += wVizOff + gap;
 
-    // START button below visualization buttons
-    const startButtonY = vizButtonsY + 60;
-    this.startButton.x = centerX - 75;
-    this.startButton.y = startButtonY;
+    // Both
+    this.showBothButton.x = currentX + wVizBoth / 2;
+    this.showBothButton.y = row2Y;
+    currentX += wVizBoth + startGap;
 
-    // Map display - centered and starting below START button
+    // START Button
+    this.startButton.width = wStart; // Update width
+    this.startButton.x = currentX + wStart / 2;
+    this.startButton.y = row2Y;
+
+
+    // --- Map Display ---
+    const mapStartY = 210;
+    const mapBottomMargin = 10;
+    
+    const availableHeight = height - mapStartY - mapBottomMargin;
+    const availableWidth = width - 40;
+
     const mapWidth = this.mapRenderer.getMapWidth();
     const mapHeight = this.mapRenderer.getMapHeight();
 
     // Scale map to fit if needed
-    const mapStartY = startButtonY + 80;
-    const availableHeight = height - mapStartY - 20;
-    const availableWidth = width - 40;
     const scaleX = availableWidth / mapWidth;
     const scaleY = availableHeight / mapHeight;
     const mapScale = Math.min(1, scaleX, scaleY);
