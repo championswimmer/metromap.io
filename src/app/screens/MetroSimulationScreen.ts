@@ -391,7 +391,7 @@ export class MetroSimulationScreen extends Container {
           // Calculate movement distance
           const currentSpeed = TRAIN_DEFAULT_SPEED * speedFactor;
           const moveDist = currentSpeed * deltaSeconds;
-          
+
           // Avoid division by zero for zero-length segments
           const progressIncrement =
             train.totalLength > 0 ? moveDist / train.totalLength : 1;
@@ -401,7 +401,7 @@ export class MetroSimulationScreen extends Container {
           // Check if reached destination
           if (train.progress >= 1.0) {
             // Arrived at station -> SWITCH TO STOPPED STATE
-            
+
             // Snap to end
             train.currentStationIdx = train.targetStationIdx;
             train.progress = 0; // Reset progress for next segment
