@@ -10,10 +10,10 @@ export const TILE_SIZE = 16; // Visual size in pixels of one grid square
 
 // --- Train Configuration ---
 export const TRAIN_MAX_CAPACITY = 30; // Maximum number of passengers per train
-export const TRAIN_DEFAULT_SPEED = 1; // Base train speed in grid squares per second
+export const TRAIN_DEFAULT_SPEED = 5; // Base train speed in grid squares per second
 
 // --- Spawning Configuration ---
-export const BASE_SPAWN_RATE = 0.5; // Base passengers per game-hour (before density modifiers)
+export const BASE_SPAWN_RATE = 0.2; // Base passengers per game-hour (before density modifiers)
 
 // --- Simulation Time Configuration ---
 // Game runs at this many milliseconds per real second for 1x speed

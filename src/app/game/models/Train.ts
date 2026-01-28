@@ -1,6 +1,6 @@
 import type { LineSegment } from "../pathfinding/LinePath";
 import type { Passenger } from "./Passenger";
-import { TRAIN_MAX_CAPACITY, TRAIN_DEFAULT_SPEED } from "../config";
+import { TRAIN_MAX_CAPACITY } from "../config";
 
 // Train capacity constant
 export { TRAIN_MAX_CAPACITY };
@@ -16,7 +16,7 @@ export interface Train {
 
   // Movement state
   direction: 1 | -1; // 1 = forward (index increasing), -1 = backward
-  speed: number; // grid squares per second
+  // Speed is now read from config at runtime
 
   // Cached path data for current segment (Station A -> Station B)
   currentSegment: LineSegment | null;
@@ -30,7 +30,6 @@ export interface Train {
 export function createTrain(
   lineId: string,
   startStationIdx: number = 0,
-  speed: number = TRAIN_DEFAULT_SPEED,
 ): Train {
   return {
     id: `train-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
@@ -39,7 +38,6 @@ export function createTrain(
     targetStationIdx: startStationIdx + 1, // Will be fixed by logic if invalid
     progress: 0,
     direction: 1,
-    speed,
     currentSegment: null,
     totalLength: 0,
     passengers: [],

@@ -12,6 +12,7 @@ import {
   TILE_SIZE,
   BASE_GAME_SPEED,
   GAME_START_TIME_ISO,
+  TRAIN_DEFAULT_SPEED,
 } from "../game/config";
 import type { GameState } from "../game/models/GameState";
 import { saveGameState } from "../game/models/GameState";
@@ -298,7 +299,7 @@ export class MetroSimulationScreen extends Container {
       if (!line.trains || line.trains.length === 0) {
         line.trains = [];
         // Add one train per line
-        const train = createTrain(line.id, 0, 1); // Start at first station, 1 square/sec
+        const train = createTrain(line.id, 0); // Start at first station
 
         // Initial path calculation
         this.updateTrainPath(train, line);
@@ -333,7 +334,7 @@ export class MetroSimulationScreen extends Container {
         }
 
         // Calculate movement distance
-        const moveDist = train.speed * deltaSeconds;
+        const moveDist = TRAIN_DEFAULT_SPEED * deltaSeconds;
         const progressIncrement = moveDist / train.totalLength;
 
         train.progress += progressIncrement;
