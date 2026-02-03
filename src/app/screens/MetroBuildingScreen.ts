@@ -403,6 +403,9 @@ export class MetroBuildingScreen extends Container {
       `Created ${line.color} line with ${line.stationIds.length} stations`,
     );
 
+    // Update money display
+    this.updateMoneyDisplay();
+
     // Reset state
     this.lineMode = "NONE";
     this.currentLine = { color: null, stationIds: [] };
@@ -719,6 +722,9 @@ export class MetroBuildingScreen extends Container {
       `Added station ${station.id} (${station.label}) at vertex (${vertexX}, ${vertexY})`,
     );
 
+    // Update money display
+    this.updateMoneyDisplay();
+
     // Redraw stations
     this.updateMetroRenderer();
   }
@@ -878,6 +884,7 @@ export class MetroBuildingScreen extends Container {
     line.trains.push(train);
 
     saveGameState(this.gameState);
+    this.updateMoneyDisplay();
     this.updateLineList();
   }
 
@@ -911,6 +918,7 @@ export class MetroBuildingScreen extends Container {
     line.trains.pop();
 
     saveGameState(this.gameState);
+    this.updateMoneyDisplay();
     this.updateLineList();
   }
 
