@@ -922,14 +922,26 @@ export class MetroBuildingScreen extends Container {
     direction: 1 | -1,
     startStationIdx: number,
   ): Train {
+    // Calculate target station index based on direction, handling edge cases
+    let targetStationIdx: number;
+    if (direction === 1) {
+      // Moving forward
+      targetStationIdx = Math.min(
+        startStationIdx + 1,
+        line.stationIds.length - 1,
+      );
+    } else {
+      // Moving backward
+      targetStationIdx = Math.max(startStationIdx - 1, 0);
+    }
+
     const train: Train = {
       id: `train-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       lineId: line.id,
       state: "MOVING" as const,
       dwellRemaining: 0,
       currentStationIdx: startStationIdx,
-      targetStationIdx:
-        direction === 1 ? startStationIdx + 1 : startStationIdx - 1,
+      targetStationIdx,
       progress: 0,
       direction,
       currentSegment: null,
