@@ -449,7 +449,7 @@ export class MetroSimulationScreen extends Container {
     // Money display to left of clock
     this.moneyLabel.anchor.set(1, 0.5);
     const clockLeft = this.clockLabel.x - this.clockLabel.width;
-    const moneyGap = 30;
+    const moneyGap = 20;
     this.moneyLabel.x = clockLeft - moneyGap;
     this.moneyLabel.y = topBarY;
 
