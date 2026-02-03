@@ -9,7 +9,7 @@
 
 Design and grow a minimalist metro system. Balance construction costs, train operations, and rider demand to complete as many journeys as possible on procedurally generated maps.
 
-> Looking for code structure and implementation details? See ./AGENTS.md for a developer‑oriented deep dive. This README focuses on what the game is and how it plays.
+> Looking for code structure and implementation details? See [AGENTS.md](./AGENTS.md) for a developer‑oriented deep dive. This README focuses on what the game is and how it plays.
 
 ## What Is This Game?
 A Mini Metro–style simulation where you place stations at grid intersections and connect them using metro lines restricted to clean 0°/45°/90° angles (Harry Beck style). Passengers spawn based on surrounding population, time‑of‑day, and land/water constraints. They ride your network using pathfinding, generating ticket revenue when they complete journeys. Your goal is to maximize completed trips while keeping infrastructure and running costs under control.
