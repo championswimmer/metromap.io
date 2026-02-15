@@ -32,7 +32,11 @@ import type { Train } from "../game/models/Train";
 import { FlatButton } from "../ui/FlatButton";
 import { Label } from "../ui/Label";
 import { Footer } from "../ui/Footer";
-import { formatMoney } from "../game/simulation/Economics";
+import {
+  formatMoney,
+  refundLineCost,
+  refundStationCost,
+} from "../game/simulation/Economics";
 
 type StationMode = "NONE" | "ADDING" | "REMOVING";
 type LineMode = "NONE" | "BUILDING";
@@ -678,12 +682,16 @@ export class MetroBuildingScreen extends Container {
       return;
     }
 
+    refundStationCost(this.gameState);
+
     // Remove the station
     this.gameState.stations.splice(index, 1);
     console.log(`Removed station at vertex (${vertexX}, ${vertexY})`);
 
     // Save state after removal
     saveGameState(this.gameState);
+
+    this.updateMoneyDisplay();
 
     // Redraw stations
     this.updateMetroRenderer();
@@ -820,6 +828,19 @@ export class MetroBuildingScreen extends Container {
       countLabel.y = (itemHeight - 5) / 2 + 10;
       itemContainer.addChild(countLabel);
 
+      // Delete line button
+      const deleteButton = new FlatButton({
+        text: "🗑",
+        width: 30,
+        height: 30,
+        fontSize: 18,
+        backgroundColor: 0x555555,
+      });
+      deleteButton.x = 130;
+      deleteButton.y = (itemHeight - 5) / 2;
+      deleteButton.onPress.connect(() => this.deleteLine(line.id));
+      itemContainer.addChild(deleteButton);
+
       // Minus button
       const minusButton = new FlatButton({
         text: "-",
@@ -926,6 +947,21 @@ export class MetroBuildingScreen extends Container {
     saveGameState(this.gameState);
     this.updateMoneyDisplay();
     this.updateLineList();
+  }
+
+  /**
+   * Delete a line and refund its build cost
+   */
+  private deleteLine(lineId: string): void {
+    const lineIndex = this.gameState.lines.findIndex((l) => l.id === lineId);
+    if (lineIndex === -1) return;
+
+    const [line] = this.gameState.lines.splice(lineIndex, 1);
+    refundLineCost(this.gameState, line);
+
+    saveGameState(this.gameState);
+    this.updateMoneyDisplay();
+    this.updateMetroRenderer();
   }
 
   /**

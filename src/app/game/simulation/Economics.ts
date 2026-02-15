@@ -61,6 +61,22 @@ export function deductLineCost(gameState: GameState, line: MetroLine): void {
 }
 
 /**
+ * Refund the cost of a station when it is removed
+ */
+export function refundStationCost(gameState: GameState): void {
+  gameState.money += STATION_BUILD_COST;
+}
+
+/**
+ * Refund the cost of building a line when it is removed
+ */
+export function refundLineCost(gameState: GameState, line: MetroLine): void {
+  const lineLength = calculateLineLength(line, gameState);
+  const lineCost = lineLength * LINE_BUILD_COST_PER_SQUARE;
+  gameState.money += lineCost;
+}
+
+/**
  * Deduct the running cost of a train traveling a certain distance
  */
 export function deductTrainRunningCost(
