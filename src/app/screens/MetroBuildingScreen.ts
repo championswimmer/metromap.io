@@ -903,7 +903,7 @@ export class MetroBuildingScreen extends Container {
     stationCount: number,
   ): number {
     if (trainNumber <= 2) {
-      return 0;
+      return direction === 1 ? 0 : Math.max(stationCount - 1, 0);
     }
 
     if (direction === 1) {
