@@ -902,10 +902,17 @@ export class MetroBuildingScreen extends Container {
     direction: 1 | -1,
     stationCount: number,
   ): number {
-    if (trainNumber <= 2) {
+    // Train 1 always starts at the beginning
+    if (trainNumber === 1) {
       return 0;
     }
 
+    // Train 2 starts at the opposite end to run in opposite direction
+    if (trainNumber === 2) {
+      return direction === 1 ? 0 : stationCount - 1;
+    }
+
+    // Trains 3+ start at midpoint offsets
     if (direction === 1) {
       return Math.floor(stationCount / 2);
     } else {
