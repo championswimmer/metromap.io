@@ -8,7 +8,11 @@ import { Container, Graphics, FederatedPointerEvent } from "pixi.js";
 
 import { PixiMapRenderer as MapRenderer } from "@rendering/pixi/PixiMapRenderer";
 import { PixiMetroRenderer as MetroRenderer } from "@rendering/pixi/PixiMetroRenderer";
-import { TILE_SIZE } from "@core/game/config";
+import {
+  TILE_SIZE,
+  STATION_BUILD_COST,
+  LINE_BUILD_COST_PER_SQUARE,
+} from "@core/game/config";
 import type { MapGrid } from "@core/game/models/MapGrid";
 import type { Station } from "@core/game/models/Station";
 import { generateStationId } from "@core/game/models/Station";
@@ -32,7 +36,10 @@ import type { Train } from "@core/game/models/Train";
 import { FlatButton } from "@rendering/components/FlatButton";
 import { Label } from "@rendering/components/Label";
 import { Footer } from "@rendering/components/Footer";
-import { formatMoney } from "@core/game/simulation/Economics";
+import {
+  calculateLineLength,
+  formatMoney,
+} from "@core/game/simulation/Economics";
 
 type StationMode = "NONE" | "ADDING" | "REMOVING";
 type LineMode = "NONE" | "BUILDING";
@@ -678,12 +685,16 @@ export class MetroBuildingScreen extends Container {
       return;
     }
 
-    // Remove the station
+    // Remove the station and refund its cost
     this.gameState.stations.splice(index, 1);
+    this.gameState.money += STATION_BUILD_COST;
     console.log(`Removed station at vertex (${vertexX}, ${vertexY})`);
 
     // Save state after removal
     saveGameState(this.gameState);
+
+    // Update money display
+    this.updateMoneyDisplay();
 
     // Redraw stations
     this.updateMetroRenderer();
@@ -820,6 +831,19 @@ export class MetroBuildingScreen extends Container {
       countLabel.y = (itemHeight - 5) / 2 + 10;
       itemContainer.addChild(countLabel);
 
+      // Delete button
+      const deleteButton = new FlatButton({
+        text: "🗑",
+        width: 30,
+        height: 30,
+        fontSize: 18,
+        backgroundColor: 0x555555,
+      });
+      deleteButton.x = 125;
+      deleteButton.y = (itemHeight - 5) / 2;
+      deleteButton.onPress.connect(() => this.deleteLine(line.id));
+      itemContainer.addChild(deleteButton);
+
       // Minus button
       const minusButton = new FlatButton({
         text: "-",
@@ -863,6 +887,25 @@ export class MetroBuildingScreen extends Container {
 
       yOffset += itemHeight + itemSpacing;
     }
+  }
+
+  /**
+   * Delete a line and refund its build cost
+   */
+  private deleteLine(lineId: string): void {
+    const lineIndex = this.gameState.lines.findIndex((l) => l.id === lineId);
+    if (lineIndex === -1) return;
+
+    const line = this.gameState.lines[lineIndex];
+    const lineLength = calculateLineLength(line, this.gameState);
+    this.gameState.money += lineLength * LINE_BUILD_COST_PER_SQUARE;
+
+    // Remove line and its trains
+    this.gameState.lines.splice(lineIndex, 1);
+
+    saveGameState(this.gameState);
+    this.updateMoneyDisplay();
+    this.updateMetroRenderer();
   }
 
   /**
