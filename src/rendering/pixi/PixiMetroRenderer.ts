@@ -103,6 +103,14 @@ export class PixiMetroRenderer extends Container {
    * Render station name labels (A, B, C, etc.)
    */
   public renderStationNameLabels(stations: Station[]): void {
+    const currentStationIds = new Set(stations.map((s) => s.id));
+    for (const [id, label] of this.stationNameLabelCache.entries()) {
+      if (!currentStationIds.has(id)) {
+        label.destroy();
+        this.stationNameLabelCache.delete(id);
+      }
+    }
+
     for (const station of stations) {
       let label = this.stationNameLabelCache.get(station.id);
 
@@ -174,6 +182,14 @@ export class PixiMetroRenderer extends Container {
    * Update station passenger count labels
    */
   public renderStationLabels(stations: Station[]): void {
+    const currentStationIds = new Set(stations.map((s) => s.id));
+    for (const [id, label] of this.stationPassengerCountCache.entries()) {
+      if (!currentStationIds.has(id)) {
+        label.destroy();
+        this.stationPassengerCountCache.delete(id);
+      }
+    }
+
     for (const station of stations) {
       const count = station.passengers ? station.passengers.length : 0;
       let label = this.stationPassengerCountCache.get(station.id);
