@@ -16,6 +16,7 @@ import {
 import type { MapGrid } from "@core/game/models/MapGrid";
 import type { Station } from "@core/game/models/Station";
 import { generateStationId } from "@core/game/models/Station";
+import type { Passenger } from "@core/game/models/Passenger";
 import type { GameState } from "@core/game/models/GameState";
 import {
   createGameState,
@@ -679,11 +680,52 @@ export class MetroBuildingScreen extends Container {
   private handleRemoveStation(vertexX: number, vertexY: number): void {
     const stationId = generateStationId(vertexX, vertexY);
     const index = this.gameState.stations.findIndex((s) => s.id === stationId);
+    const station = this.gameState.stations[index];
 
     if (index === -1) {
       console.log("No station at this vertex");
       return;
     }
+
+    // Do not remove stations that are part of any existing line
+    const stationInUse = this.gameState.lines.some((line) =>
+      line.stationIds.includes(stationId),
+    );
+    if (stationInUse) {
+      console.log(
+        `Cannot remove station at vertex (${vertexX}, ${vertexY}): it is used by an existing line`,
+      );
+      return;
+    }
+
+    const referencesStation = (passenger?: Passenger): boolean => {
+      if (!passenger) return false;
+      return (
+        passenger.sourceStationId === stationId ||
+        passenger.destinationStationId === stationId ||
+        passenger.currentStationId === stationId
+      );
+    };
+
+    // Clean up passengers referencing the station across game state, station queues, and trains
+    if (station) {
+      station.passengers = station.passengers.filter(
+        (p) => !referencesStation(p),
+      );
+    }
+
+    this.gameState.passengers = this.gameState.passengers.filter(
+      (p) => !referencesStation(p),
+    );
+
+    this.gameState.lines.forEach((line) => {
+      line.trains.forEach((train) => {
+        if (!train.passengers) return;
+        train.passengers = train.passengers.filter(
+          (p) => !referencesStation(p),
+        );
+      });
+    });
 
     // Remove the station and refund its cost
     this.gameState.stations.splice(index, 1);
@@ -899,6 +941,53 @@ export class MetroBuildingScreen extends Container {
     const line = this.gameState.lines[lineIndex];
     const lineLength = calculateLineLength(line, this.gameState);
     this.gameState.money += lineLength * LINE_BUILD_COST_PER_SQUARE;
+
+    const trainIds = new Set<string>();
+    const passengersToRemove = new Set<string>();
+
+    line.trains.forEach((train) => {
+      trainIds.add(train.id);
+      if (Array.isArray(train.passengers)) {
+        train.passengers.forEach((p) => passengersToRemove.add(p.id));
+        train.passengers = [];
+      }
+    });
+
+    const passengerUsesLine = (passenger: Passenger): boolean => {
+      if (!passenger) return false;
+
+      if (passenger.currentTrainId && trainIds.has(passenger.currentTrainId)) {
+        return true;
+      }
+
+      const currentStationId = passenger.currentStationId;
+      const nextWaypointId = passenger.path[passenger.nextWaypointIndex];
+      if (!currentStationId || !nextWaypointId) return false;
+
+      const fromIdx = line.stationIds.indexOf(currentStationId);
+      const toIdx = line.stationIds.indexOf(nextWaypointId);
+      return fromIdx !== -1 && toIdx !== -1;
+    };
+
+    // Remove passengers associated with this line
+    this.gameState.passengers = this.gameState.passengers.filter((p) => {
+      const shouldRemove = passengersToRemove.has(p.id) || passengerUsesLine(p);
+      if (shouldRemove) {
+        passengersToRemove.add(p.id);
+      }
+      return !shouldRemove;
+    });
+
+    // Clean station queues
+    this.gameState.stations.forEach((station) => {
+      station.passengers = station.passengers.filter((p) => {
+        if (passengersToRemove.has(p.id) || passengerUsesLine(p)) {
+          passengersToRemove.add(p.id);
+          return false;
+        }
+        return true;
+      });
+    });
 
     // Remove line and its trains
     this.gameState.lines.splice(lineIndex, 1);
